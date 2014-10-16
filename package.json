@@ -1,0 +1,44 @@
+{
+  "name": "fontpath-bmfont-gl",
+  "version": "1.0.0",
+  "description": "fontpath renderer for bitmap fonts in webgl",
+  "main": "index.js",
+  "license": "MIT",
+  "author": {
+    "name": "Matt DesLauriers",
+    "email": "dave.des@gmail.com",
+    "url": "https://github.com/mattdesl"
+  },
+  "dependencies": {
+    "gl-white-texture": "^1.0.0",
+    "inherits": "^2.0.1"
+  },
+  "devDependencies": {
+    "bluebird": "^2.3.5",
+    "canvas-testbed": "^1.0.2",
+    "gl-basic-shader": "^1.2.2",
+    "gl-mat4": "^1.0.0",
+    "gl-texture2d": "^2.0.7",
+    "img": "0.0.1"
+  },
+  "scripts": {
+    "test": "node test.js"
+  },
+  "keywords": [
+    "fontpath",
+    "font",
+    "text",
+    "sprite",
+    "bmfont",
+    "bitmap",
+    "bitmapfont"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/mattdesl/fontpath-bmfont-gl.git"
+  },
+  "homepage": "https://github.com/mattdesl/fontpath-bmfont-gl",
+  "bugs": {
+    "url": "https://github.com/mattdesl/fontpath-bmfont-gl/issues"
+  }
+}
