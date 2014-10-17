@@ -54,7 +54,7 @@ TextRenderer.prototype._drawGlyph = function(batch, data) {
     texcoordGlyph(glyph, img.shape, batch.texcoord)
     batch.position = tmpPos
     batch.shape = tmpShape
-    batch.push()   
+    batch.push()
 }
 
 TextRenderer.prototype.draw = function(batch, x, y, start, end) {

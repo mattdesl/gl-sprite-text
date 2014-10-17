@@ -1,5 +1,5 @@
 {
-  "name": "fontpath-bmfont-gl",
+  "name": "gl-sprite-text",
   "version": "1.0.0",
   "description": "fontpath renderer for bitmap fonts in webgl",
   "main": "index.js",
@@ -22,7 +22,8 @@
     "img": "0.0.1"
   },
   "scripts": {
-    "test": "node test.js"
+    "test": "node test.js",
+    "demo": "beefy demo/index.js --cwd demo"
   },
   "keywords": [
     "fontpath",
@@ -35,10 +36,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git://github.com/mattdesl/fontpath-bmfont-gl.git"
+    "url": "git://github.com/mattdesl/gl-sprite-text.git"
   },
-  "homepage": "https://github.com/mattdesl/fontpath-bmfont-gl",
+  "homepage": "https://github.com/mattdesl/gl-sprite-text",
   "bugs": {
-    "url": "https://github.com/mattdesl/fontpath-bmfont-gl/issues"
+    "url": "https://github.com/mattdesl/gl-sprite-text/issues"
   }
 }

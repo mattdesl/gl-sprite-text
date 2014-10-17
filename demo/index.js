@@ -16,7 +16,6 @@ var scale = mat4.create()
 var s = 1/(window.devicePixelRatio||1) 
 mat4.scale(scale, scale, [s, s, 1.0])
 
-
 function render(gl, width, height) {
     gl.clearColor(0,0,0,1)
     gl.clear(gl.COLOR_BUFFER_BIT)
@@ -37,7 +36,7 @@ function render(gl, width, height) {
     batch.bind(shader)
     batch.color = [1, 1, 1, 1]
     renderer.draw(batch, 0, bounds.height)
-
+    
     batch.unbind()
 }
 
@@ -54,7 +53,8 @@ function start(gl) {
         text: 'This is a test of bitmap fonts!',
         underline: true
     })
-
+    
+    //bmfont.pages is an array of image paths for each sheet
     //uses promises to async load and upload some textures
     loadTextures(gl, bmfont.pages).then(function(p) {
         renderer.textures = p
