@@ -4,6 +4,8 @@
 
 fontpath renderer for bitmap fonts in webgl
 
+(experimental WIP)
+
 ## Usage
 
 [![NPM](https://nodei.co/npm/gl-sprite-text.png)](https://nodei.co/npm/gl-sprite-text/)
