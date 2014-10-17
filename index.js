@@ -2,7 +2,7 @@ var Base = require('fontpath-simple-renderer')
 var inherits = require('inherits')
 var bmfont2fontpath = require('fontpath-bmfont')
 var WhiteTex = require('gl-white-texture')
-var texcoord = require('./texcoord')
+var texcoord = require('texcoord')
 
 var tmpPos = [0, 0],
     tmpShape = [0, 0],
