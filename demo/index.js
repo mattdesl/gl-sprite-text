@@ -104,6 +104,7 @@ function start(gl, width) {
         textSmall = createText(gl, {
             font: bmfontSmall,
             text: [
+                'all text rendered in pure WebGL',
                 'a 2048x2048 texture holds 25 different font sizes/styles',
                 'the text area below is drawn with a static buffer on the GPU'
             ].join('\n'),
