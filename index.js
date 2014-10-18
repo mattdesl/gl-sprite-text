@@ -28,7 +28,7 @@ function TextRenderer(gl, opt) {
 
     Base.call(this, opt)
 
-    this.textures = []
+    this.textures = opt.textures || []
     this.gl = gl
     if (!gl)
         throw new Error("must specify gl context")
