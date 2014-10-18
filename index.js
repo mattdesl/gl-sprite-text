@@ -1,8 +1,10 @@
 var Base = require('fontpath-simple-renderer')
 var inherits = require('inherits')
 var bmfont2fontpath = require('fontpath-bmfont')
-var WhiteTex = require('gl-white-texture')
 var texcoord = require('texcoord')
+var xtend = require('xtend')
+
+var Batch = require('gl-sprite-batch')
 
 var tmpPos = [0, 0],
     tmpShape = [0, 0],
@@ -23,8 +25,9 @@ function TextRenderer(gl, opt) {
         return new TextRenderer(gl, opt)
     opt = opt||{}
 
-    if (opt.font) 
-        opt.font = bmfont2fontpath(opt.font)
+    if (!opt.font) 
+        throw new Error('must specify bmfont at creation time')
+    opt.font = bmfont2fontpath(opt.font)
 
     Base.call(this, opt)
 
@@ -32,14 +35,48 @@ function TextRenderer(gl, opt) {
     this.gl = gl
     if (!gl)
         throw new Error("must specify gl context")
-
-    //used for underlines
-    this.whiteTexture = WhiteTex(gl)
+    this.batch = opt.batch || null
 }
 
 inherits(TextRenderer, Base)
 
-TextRenderer.Align = Base.Align
+TextRenderer.prototype.draw = function(shader, x, y, start, end) {
+    if (!this.batch)
+        this.batch = Batch(gl)
+
+    var batch = this.batch
+    batch.clear()
+    batch.bind(shader)
+    this.build(x, y, start, end)
+    batch.draw()
+    batch.unbind()
+}
+
+TextRenderer.prototype.build = function(x, y, start, end) {
+    var result = this.render(x, y, start, end)
+
+    //a user calling push() is probably doing it for a static batch
+    //in which case they need the capacity to match exactly
+    if (!this.batch)
+        this.batch = Batch(gl, { capacity: result.glyphs.length + result.underlines.length })
+
+    var batch = this.batch
+    batch.texcoord = DEFAULT_TEXCOORD
+    batch.texture = null
+
+    for (i = 0; i < result.underlines.length; i++) {
+        var underline = result.underlines[i]
+        batch.position = underline.position
+        batch.shape = underline.size
+        batch.push()
+    }
+
+    //now draw our glyphs into the batch...
+    for (i = 0; i < result.glyphs.length; i++) {
+        var g = result.glyphs[i]
+        this._drawGlyph(batch, g)
+    }
+}
 
 TextRenderer.prototype._drawGlyph = function(batch, data) {
     //TODO: we could sort these by texture page to reduce draws
@@ -51,34 +88,10 @@ TextRenderer.prototype._drawGlyph = function(batch, data) {
     tmpShape[1] = glyph.height * data.scale[1]
     
     batch.texture = img
-    texcoordGlyph(glyph, img.shape, batch.texcoord)
+    texcoordGlyph(glyph, img && img.shape, batch.texcoord)
     batch.position = tmpPos
     batch.shape = tmpShape
     batch.push()
-}
-
-TextRenderer.prototype.draw = function(batch, x, y, start, end) {
-    if (!this.textures || this.textures.length === 0)
-        return
-
-    var result = this.render(x, y, start, end)
-
-    var i = 0
-
-    batch.texcoord = DEFAULT_TEXCOORD
-    batch.texture = this.whiteTexture
-
-    for (i = 0; i < result.underlines.length; i++) {
-        var underline = result.underlines[i]
-        batch.position = underline.position
-        batch.shape = underline.size
-        batch.push()
-    }
-
-    for (i = 0; i < result.glyphs.length; i++) {
-        var g = result.glyphs[i]
-        this._drawGlyph(batch, g)
-    }
 }
 
 module.exports = TextRenderer
