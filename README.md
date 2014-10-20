@@ -11,6 +11,8 @@ The [BMFont spec](https://www.npmjs.org/package/bmfont2json) is used for glyph a
 You can use [bmfont-lato](https://www.npmjs.org/package/bmfont-lato) for testing; it includes Lato Regular in a few sizes and the base64-inlined `images` ndarray.
 
 ```js
+var createText = require('gl-sprite-text')
+
 var createTexture = require('gl-texture2d')
 var Lato = require('bmfont-lato')
 

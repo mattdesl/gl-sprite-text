@@ -1401,7 +1401,10 @@ module.exports = function(gl, paths) {
         return texAsync(gl, p)
     }))
 }
-},{"bluebird":12,"gl-texture2d":140,"img":141}],8:[function(require,module,exports){
+},{"bluebird":12,"gl-texture2d":121,"img":125}],8:[function(require,module,exports){
+//This is a fairly complex demo, the sdf.js or simple.js demos 
+//might be a better place to look!
+
 require('canvas-testbed')(render, start, { context: 'webgl' })
 
 var createText = require('../')
@@ -1482,9 +1485,7 @@ function render(gl, width, height, dt) {
     mat4.translate(transform, transform, [off, yoff + bigText.getBounds().height+off, 0])
     shader.uniforms.model = transform
     
-    staticBatch.bind(shader)
-    staticBatch.draw()
-    staticBatch.unbind()
+    bigText.draw(shader)
 
     gl.disable(gl.SCISSOR_TEST)
 }
@@ -1538,14 +1539,11 @@ function createStaticText(textures, wrapWidth) {
         align: 'left',
         text: text,
         wrapWidth: wrapWidth,
-        textures: textures
+        textures: textures,
+        dyanmic: false
     })
 
-    //build a SpriteBatch for this text element
-    bigText.build()
-
-    //now we can use that sprite batch for rendering
-    staticBatch = bigText.batch
+    bigText.cache()
 }
 },{"../":9,"./fonts.json":6,"./gl-load-textures":7,"canvas-testbed":45,"gl-basic-shader":60,"gl-mat4":75,"gl-sprite-batch":90}],9:[function(require,module,exports){
 var Base = require('fontpath-simple-renderer')
@@ -1561,6 +1559,7 @@ var tmpPos = [0, 0],
     tmp1 = [0, 0],
     tmp2 = [0, 0]
 var DEFAULT_TEXCOORD = [0, 0, 1, 1]
+var maxInitialCapacity = 500
 
 function texcoordGlyph(glyph, atlas, out) {
     tmp1[0] = glyph.x
@@ -1585,40 +1584,82 @@ function TextRenderer(gl, opt) {
     this.gl = gl
     if (!gl)
         throw new Error("must specify gl context")
-    this.batch = opt.batch || null
+    
+    //assume text will be used dynamically 
+    if (typeof opt.dynamic !== 'boolean')
+        opt.dynamic = true
+
+    var batch = opt.batch
+    if (!batch)
+        this.defaultBatch = Batch(gl, opt)
+    this.batch = batch || this.defaultBatch
+
+    if (typeof opt.wrapWidth !== 'number')
+        this.layout()
 }
 
 inherits(TextRenderer, Base)
 
-TextRenderer.prototype.draw = function(shader, x, y, start, end) {
-    if (!this.batch)
-        this.batch = Batch(gl)
-
-    var batch = this.batch
-    batch.clear()
-    batch.bind(shader)
-    this.build(x, y, start, end)
-    batch.draw()
-    batch.unbind()
+TextRenderer.prototype.dispose = function(textures) {
+    if (this.defaultBatch)
+        this.defaultBatch.dispose()
+    if (textures) {
+        this.textures.forEach(function(t) {
+            if (typeof t.dispose === 'function')
+                t.dispose()
+        })
+    }
+    return this
 }
 
-TextRenderer.prototype.build = function(x, y, start, end) {
+TextRenderer.prototype.uncache = function() {
+    this._cache = false
+    this.batch.clear()
+    return this
+}
+
+TextRenderer.prototype.cache = function(x, y, start, end) {
+    // if (this.underline || this.font.pages.length > 1)
+    //     throw new Error('currently cached text does not support underlines or multiple texture pages')
+    
+    this._cache = true
+    this.batch.ensureCapacity(this.text.length)
+    this.batch.clear()
+    this._build(x, y, start, end)
+    return this
+}
+
+TextRenderer.prototype.draw = function(shader, x, y, start, end) {
+    var batch = this.batch
+    batch.bind(shader)
+
+    //if we're drawing dynamically
+    if (!this._cache) {
+        batch.clear()
+        this._build(x, y, start, end)
+    }
+    
+    batch.draw()
+    batch.unbind()
+    return this
+}
+
+TextRenderer.prototype._build = function(x, y, start, end) {
     var result = this.render(x, y, start, end)
 
-    //a user calling push() is probably doing it for a static batch
-    //in which case they need the capacity to match exactly
-    if (!this.batch)
-        this.batch = Batch(gl, { capacity: result.glyphs.length + result.underlines.length })
-
     var batch = this.batch
-    batch.texcoord = DEFAULT_TEXCOORD
-    batch.texture = null
 
-    for (i = 0; i < result.underlines.length; i++) {
-        var underline = result.underlines[i]
-        batch.position = underline.position
-        batch.shape = underline.size
-        batch.push()
+    //underlines currently not supported with cache()
+    if (!this._cache) {
+        batch.texcoord = DEFAULT_TEXCOORD
+        batch.texture = null
+
+        for (i = 0; i < result.underlines.length; i++) {
+            var underline = result.underlines[i]
+            batch.position = underline.position
+            batch.shape = underline.size
+            batch.push()
+        }
     }
 
     //now draw our glyphs into the batch...
@@ -1629,7 +1670,7 @@ TextRenderer.prototype.build = function(x, y, start, end) {
 }
 
 TextRenderer.prototype._drawGlyph = function(batch, data) {
-    //TODO: we could sort these by texture page to reduce draws
+    //... we could sort these by texture page to reduce draws
     var glyph = data.glyph
     var img = this.textures[glyph.page]
     tmpPos[0] = data.position[0]+glyph.hbx
@@ -1645,7 +1686,7 @@ TextRenderer.prototype._drawGlyph = function(batch, data) {
 }
 
 module.exports = TextRenderer
-},{"fontpath-bmfont":54,"fontpath-simple-renderer":55,"gl-sprite-batch":90,"inherits":142,"texcoord":143,"xtend":144}],10:[function(require,module,exports){
+},{"fontpath-bmfont":54,"fontpath-simple-renderer":55,"gl-sprite-batch":90,"inherits":126,"texcoord":129,"xtend":130}],10:[function(require,module,exports){
 /**
  * The MIT License (MIT)
  * 
@@ -7454,29 +7495,14 @@ module.exports = function(bmfont) {
 }
 },{}],55:[function(require,module,exports){
 var Base = require('fontpath-renderer')
+var inherits = require('inherits')
 
 //TODO: Eventually lots of this code will just replace fontpath-renderer...
 
 function FontpathRenderer(options) {
     if (!(this instanceof FontpathRenderer))
         return new FontpathRenderer(options)
-    options = options||{}
-    Base.call(this, options.font, options.fontSize)
-
-    if (typeof options.align === 'string')
-        this.align = options.align
-    if (typeof options.underline === 'boolean')
-        this.underline = options.underline
-    if (typeof options.underlineThickness === 'number')
-        this.underlineThickness = options.underlineThickness
-    if (typeof options.underlinePosition === 'number')
-        this.underlinePosition = options.underlinePosition
-    if (typeof options.text === 'string')
-        this.text = options.text
-    if (typeof options.wrapMode === 'string')
-        this.wordwrap.mode = options.wrapMode
-    if (typeof options.wrapWidth === 'number')
-        this.layout(options.wrapWidth)
+    Base.call(this, options)
 
     this.data = {
         glyphs: [],
@@ -7484,9 +7510,7 @@ function FontpathRenderer(options) {
     }
 }
 
-FontpathRenderer.prototype = Object.create(Base.prototype)
-FontpathRenderer.constructor = FontpathRenderer
-FontpathRenderer.Align = Base.Align
+inherits(FontpathRenderer, Base)
 
 FontpathRenderer.prototype.renderGlyph = function(i, glyph, scale, x, y) {
     this.data.glyphs.push(new Glyph(i, glyph, 
@@ -7524,96 +7548,130 @@ function Underline(position, size) {
 }
 
 module.exports = FontpathRenderer
-},{"fontpath-renderer":56}],56:[function(require,module,exports){
+},{"fontpath-renderer":56,"inherits":126}],56:[function(require,module,exports){
 var GlyphIterator = require('fontpath-glyph-iterator');
 var WordWrap = require('fontpath-wordwrap');
 
 var tmpBounds = { x: 0, y: 0, width: 0, height: 0, glyphs: 0 };
 
-function TextRenderer(font, fontSize) {
-    this.iterator = new GlyphIterator(font, fontSize);
+function TextRenderer(options) {
+    if (!(this instanceof TextRenderer))
+        return new TextRenderer(options);
+    options = options||{}
+
+    this.iterator = new GlyphIterator(options.font, options.fontSize);
     this.wordwrap = new WordWrap();
 
-    this.align = TextRenderer.Align.LEFT;
+    this.align = 'left';
     this.underline = false;
 
     this.underlineThickness = undefined;
     this.underlinePosition = undefined;
     this._text = "";
-}
 
-//Externally we use strings for parity with HTML5 canvas, better debugging, etc.
-TextRenderer.Align = {
-    LEFT: 'left',
-    CENTER: 'center',
-    RIGHT: 'right'
-};
+    if (typeof options.align === 'string')
+        this.align = options.align;
+    if (typeof options.underline === 'boolean')
+        this.underline = options.underline;
+    if (typeof options.underlineThickness === 'number')
+        this.underlineThickness = options.underlineThickness;
+    if (typeof options.underlinePosition === 'number')
+        this.underlinePosition = options.underlinePosition;
+    if (typeof options.text === 'string')
+        this.text = options.text;
+    if (typeof options.lineHeight === 'number')
+        this.lineHeight = options.lineHeight;
+    if (typeof options.letterSpacing === 'number')
+        this.letterSpacing = options.letterSpacing;
+    if (typeof options.wrapMode === 'string')
+        this.wordwrap.mode = options.wrapMode;
+    if (typeof options.wrapWidth === 'number')
+        this.layout(options.wrapWidth);
+}
 
 //Internally we will use integers to avoid string comparison for each glyph
 var LEFT_ALIGN = 0, CENTER_ALIGN = 1, RIGHT_ALIGN = 2;
 var ALIGN_ARRAY = [
-    TextRenderer.Align.LEFT, 
-    TextRenderer.Align.CENTER, 
-    TextRenderer.Align.RIGHT
+    'left', 
+    'center', 
+    'right'
 ];
-
-/**
- * If the new font differs from the last, the text layout is cleared
- * and placed onto a single line. Users must manually re-layout the text 
- * for word wrapping.
- */
-Object.defineProperty(TextRenderer.prototype, "font", {
-    get: function() {
-        return this.iterator.font;
-    },
-    set: function(val) {
-        var oldFont = this.iterator.font;
-        this.iterator.font = val;
-        if (oldFont !== this.iterator.font)
-            this.clearLayout();
-    },
-});
-
-/**
- * If the new font size differs from the last, the text layout is cleared
- * and placed onto a single line. Users must manually re-layout the text 
- * for word wrapping.
- */
-Object.defineProperty(TextRenderer.prototype, "fontSize", {
-    get: function() {
-        return this.iterator.fontSize;
-    },
-    set: function(val) {
-        var oldSize = this.iterator.fontSize;
-
-        this.iterator.fontSize = val;
-
-        if (oldSize !== this.iterator.fontSize)
-            this.clearLayout();
-    },
-});
-
-/**
- * If the new text is different from the last, the layout (i.e. word-wrapping)
- * is cleared and the result is a single line of text (similar to HTML5 canvas text
- * rendering).
- * 
- * The text then needs to be re-wordwrapped with a call to `layout()`.
- */
-Object.defineProperty(TextRenderer.prototype, "text", {
-    get: function() {
-        return this._text;
+    
+Object.defineProperties(TextRenderer.prototype, {
+    /**
+     * If the new font differs from the last, the text layout is cleared
+     * and placed onto a single line. Users must manually re-layout the text 
+     * for word wrapping.
+     */
+    "font": {
+        get: function() {
+            return this.iterator.font;
+        },
+        set: function(val) {
+            var oldFont = this.iterator.font;
+            this.iterator.font = val;
+            if (oldFont !== this.iterator.font)
+                this.clearLayout();
+        },
     },
 
-    set: function(text) {
-        text = text||"";
+    /**
+     * If the new font size differs from the last, the text layout is cleared
+     * and placed onto a single line. Users must manually re-layout the text 
+     * for word wrapping.
+     */
+    "fontSize": {
+        get: function() {
+            return this.iterator.fontSize;
+        },
+        set: function(val) {
+            var oldSize = this.iterator.fontSize;
 
-        var old = this._text;
-        this._text = text;
-        this.wordwrap.text = this.text;
+            this.iterator.fontSize = val;
 
-        if (this._text !== old) 
-            this.clearLayout();
+            if (oldSize !== this.iterator.fontSize)
+                this.clearLayout();
+        },
+    },
+    "lineHeight": {
+        get: function() {
+            return this.iterator.lineHeight;
+        },
+        set: function(val) {
+            this.iterator.lineHeight = val;
+        },
+    },
+    "letterSpacing": {
+         get: function() {
+            return this.iterator.letterSpacing;
+        },
+        set: function(val) {
+            this.iterator.letterSpacing = val;
+        },
+    },
+
+    /**
+     * If the new text is different from the last, the layout (i.e. word-wrapping)
+     * is cleared and the result is a single line of text (similar to HTML5 canvas text
+     * rendering).
+     * 
+     * The text then needs to be re-wordwrapped with a call to `layout()`.
+     */
+    "text": {
+        get: function() {
+            return this._text;
+        },
+
+        set: function(text) {
+            text = text||"";
+
+            var old = this._text;
+            this._text = text;
+            this.wordwrap.text = this.text;
+
+            if (this._text !== old) 
+                this.clearLayout();
+        }
     }
 });
 
@@ -7910,12 +7968,16 @@ var DEFAULT_TAB_WIDTH = 4;
 
 function GlyphIterator(font, fontSize) {
     this._fontSize = undefined;
+    this._fontScale = undefined;
     this._font = undefined;
     this.fontScale = 1.0;
     this.kerning = true;
+    this.letterSpacing = 0;
     this.lineHeight = undefined;
-
-    this.fontSize = typeof fontSize === 'number' ? fontSize : font.size;
+    
+    this.fontSize = typeof fontSize === 'number'
+            ? fontSize
+            : (font ? font.size : undefined);
     this.font = font;
 
     //Number of spaces for a tab character
@@ -7969,6 +8031,10 @@ Object.defineProperty(GlyphIterator.prototype, "tabWidth", {
 
 Object.defineProperty(GlyphIterator.prototype, "fontSize", {
     get: function() {
+        if (typeof this._fontSize !== 'number')
+            return this.font.bitmap 
+                ? this.font.size 
+                : util.pointToPixel(this.font.size)
         return this._fontSize;
     },
 
@@ -8088,7 +8154,7 @@ GlyphIterator.prototype.advanceLine = function() {
 GlyphIterator.prototype.advance = function(glyph) {
     var advance = (glyph.xoff * this.fontScale);
     // Advance to next pen position
-    this.pen.x += advance;
+    this.pen.x += advance + this.letterSpacing;
     return advance;
 };
 
@@ -10187,10 +10253,11 @@ function SpriteBatch(gl, opt) {
     this.mode = typeof opt.mode === 'number' ? opt.mode : gl.TRIANGLES
     this.premultiplied = opt.premultiplied || false
 
+    this._dirty = true
     this.create(opt)
 
     //set default attributes
-    this.reset()
+    this.defaults()
 }
 
 //mix in create() and ensureCapacity() functions
@@ -10229,6 +10296,7 @@ mixes(SpriteBatch, {
     },
 
     bind: function(shader) {
+        shader.bind()
         this.vao.bind(shader)
         this._bound = true
     },
@@ -10238,7 +10306,7 @@ mixes(SpriteBatch, {
         this._bound = false
     },
 
-    reset: function() {
+    defaults: function() {
         this.position = copy2(position, 0, 0)
         this.texcoord = copy4(texcoord, 0, 0, 1, 1)
         this.color = copy4(color, 1, 1, 1, 1)
@@ -10269,6 +10337,8 @@ mixes(SpriteBatch, {
             //if we ARE bound, we can flush the batch and continue drawing
             this.flush()
         }
+
+        this._dirty = true
 
         //get RGBA components and pack into a single float
         var colorRGBA = this.premultiplied ? premult(this.color, tmp4) : this.color
@@ -10316,8 +10386,7 @@ mixes(SpriteBatch, {
 
     flush: function() {
         this.draw()
-        this.idx = 0
-        return this
+        return this.clear()
     },
 
     draw: function() {
@@ -10327,12 +10396,13 @@ mixes(SpriteBatch, {
         if (this.idx === 0 || !this._bound)
             return this
 
-
-
         var gl = this.gl
-
-        var view = this.vertices.subarray(0, this.idx)
-        this.vertexBuffer.update(view, 0)
+        
+        if (this._dirty) {
+            var view = this.vertices.subarray(0, this.idx)
+            this.vertexBuffer.update(view, 0)
+            this._dirty = false
+        }
 
         if (this._lastTexture)
             this._lastTexture.bind()
@@ -10373,7 +10443,7 @@ function transformMat4(out, a, m) {
     out[1] = m[1] * x + m[5] * y + m[13]
     return out
 }
-},{"./common":89,"./pack-rgba-float":127,"gl-white-texture":118,"mixes":121,"premultiplied-rgba":126}],91:[function(require,module,exports){
+},{"./common":89,"./pack-rgba-float":108,"gl-white-texture":122,"mixes":105,"premultiplied-rgba":107}],91:[function(require,module,exports){
 var createVAOEmulated = require("./lib/vao-emulated.js")
 
 function createVAO(gl, attributes, elements, elementsType) {
@@ -10645,7 +10715,7 @@ function createBuffer(gl, data, type, usage) {
 }
 
 module.exports = createBuffer
-},{"ndarray":100,"ndarray-ops":95,"typedarray-pool":104,"webglew":106}],95:[function(require,module,exports){
+},{"ndarray":127,"ndarray-ops":95,"typedarray-pool":102,"webglew":104}],95:[function(require,module,exports){
 "use strict"
 
 var compile = require("cwise-compiler")
@@ -11613,6 +11683,872 @@ function unique(list, compare, sorted) {
 module.exports = unique
 
 },{}],100:[function(require,module,exports){
+/**
+ * Bit twiddling hacks for JavaScript.
+ *
+ * Author: Mikola Lysenko
+ *
+ * Ported from Stanford bit twiddling hack library:
+ *    http://graphics.stanford.edu/~seander/bithacks.html
+ */
+
+"use strict"; "use restrict";
+
+//Number of bits in an integer
+var INT_BITS = 32;
+
+//Constants
+exports.INT_BITS  = INT_BITS;
+exports.INT_MAX   =  0x7fffffff;
+exports.INT_MIN   = -1<<(INT_BITS-1);
+
+//Returns -1, 0, +1 depending on sign of x
+exports.sign = function(v) {
+  return (v > 0) - (v < 0);
+}
+
+//Computes absolute value of integer
+exports.abs = function(v) {
+  var mask = v >> (INT_BITS-1);
+  return (v ^ mask) - mask;
+}
+
+//Computes minimum of integers x and y
+exports.min = function(x, y) {
+  return y ^ ((x ^ y) & -(x < y));
+}
+
+//Computes maximum of integers x and y
+exports.max = function(x, y) {
+  return x ^ ((x ^ y) & -(x < y));
+}
+
+//Checks if a number is a power of two
+exports.isPow2 = function(v) {
+  return !(v & (v-1)) && (!!v);
+}
+
+//Computes log base 2 of v
+exports.log2 = function(v) {
+  var r, shift;
+  r =     (v > 0xFFFF) << 4; v >>>= r;
+  shift = (v > 0xFF  ) << 3; v >>>= shift; r |= shift;
+  shift = (v > 0xF   ) << 2; v >>>= shift; r |= shift;
+  shift = (v > 0x3   ) << 1; v >>>= shift; r |= shift;
+  return r | (v >> 1);
+}
+
+//Computes log base 10 of v
+exports.log10 = function(v) {
+  return  (v >= 1000000000) ? 9 : (v >= 100000000) ? 8 : (v >= 10000000) ? 7 :
+          (v >= 1000000) ? 6 : (v >= 100000) ? 5 : (v >= 10000) ? 4 :
+          (v >= 1000) ? 3 : (v >= 100) ? 2 : (v >= 10) ? 1 : 0;
+}
+
+//Counts number of bits
+exports.popCount = function(v) {
+  v = v - ((v >>> 1) & 0x55555555);
+  v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
+  return ((v + (v >>> 4) & 0xF0F0F0F) * 0x1010101) >>> 24;
+}
+
+//Counts number of trailing zeros
+function countTrailingZeros(v) {
+  var c = 32;
+  v &= -v;
+  if (v) c--;
+  if (v & 0x0000FFFF) c -= 16;
+  if (v & 0x00FF00FF) c -= 8;
+  if (v & 0x0F0F0F0F) c -= 4;
+  if (v & 0x33333333) c -= 2;
+  if (v & 0x55555555) c -= 1;
+  return c;
+}
+exports.countTrailingZeros = countTrailingZeros;
+
+//Rounds to next power of 2
+exports.nextPow2 = function(v) {
+  v += v === 0;
+  --v;
+  v |= v >>> 1;
+  v |= v >>> 2;
+  v |= v >>> 4;
+  v |= v >>> 8;
+  v |= v >>> 16;
+  return v + 1;
+}
+
+//Rounds down to previous power of 2
+exports.prevPow2 = function(v) {
+  v |= v >>> 1;
+  v |= v >>> 2;
+  v |= v >>> 4;
+  v |= v >>> 8;
+  v |= v >>> 16;
+  return v - (v>>>1);
+}
+
+//Computes parity of word
+exports.parity = function(v) {
+  v ^= v >>> 16;
+  v ^= v >>> 8;
+  v ^= v >>> 4;
+  v &= 0xf;
+  return (0x6996 >>> v) & 1;
+}
+
+var REVERSE_TABLE = new Array(256);
+
+(function(tab) {
+  for(var i=0; i<256; ++i) {
+    var v = i, r = i, s = 7;
+    for (v >>>= 1; v; v >>>= 1) {
+      r <<= 1;
+      r |= v & 1;
+      --s;
+    }
+    tab[i] = (r << s) & 0xff;
+  }
+})(REVERSE_TABLE);
+
+//Reverse bits in a 32 bit word
+exports.reverse = function(v) {
+  return  (REVERSE_TABLE[ v         & 0xff] << 24) |
+          (REVERSE_TABLE[(v >>> 8)  & 0xff] << 16) |
+          (REVERSE_TABLE[(v >>> 16) & 0xff] << 8)  |
+           REVERSE_TABLE[(v >>> 24) & 0xff];
+}
+
+//Interleave bits of 2 coordinates with 16 bits.  Useful for fast quadtree codes
+exports.interleave2 = function(x, y) {
+  x &= 0xFFFF;
+  x = (x | (x << 8)) & 0x00FF00FF;
+  x = (x | (x << 4)) & 0x0F0F0F0F;
+  x = (x | (x << 2)) & 0x33333333;
+  x = (x | (x << 1)) & 0x55555555;
+
+  y &= 0xFFFF;
+  y = (y | (y << 8)) & 0x00FF00FF;
+  y = (y | (y << 4)) & 0x0F0F0F0F;
+  y = (y | (y << 2)) & 0x33333333;
+  y = (y | (y << 1)) & 0x55555555;
+
+  return x | (y << 1);
+}
+
+//Extracts the nth interleaved component
+exports.deinterleave2 = function(v, n) {
+  v = (v >>> n) & 0x55555555;
+  v = (v | (v >>> 1))  & 0x33333333;
+  v = (v | (v >>> 2))  & 0x0F0F0F0F;
+  v = (v | (v >>> 4))  & 0x00FF00FF;
+  v = (v | (v >>> 16)) & 0x000FFFF;
+  return (v << 16) >> 16;
+}
+
+
+//Interleave bits of 3 coordinates, each with 10 bits.  Useful for fast octree codes
+exports.interleave3 = function(x, y, z) {
+  x &= 0x3FF;
+  x  = (x | (x<<16)) & 4278190335;
+  x  = (x | (x<<8))  & 251719695;
+  x  = (x | (x<<4))  & 3272356035;
+  x  = (x | (x<<2))  & 1227133513;
+
+  y &= 0x3FF;
+  y  = (y | (y<<16)) & 4278190335;
+  y  = (y | (y<<8))  & 251719695;
+  y  = (y | (y<<4))  & 3272356035;
+  y  = (y | (y<<2))  & 1227133513;
+  x |= (y << 1);
+  
+  z &= 0x3FF;
+  z  = (z | (z<<16)) & 4278190335;
+  z  = (z | (z<<8))  & 251719695;
+  z  = (z | (z<<4))  & 3272356035;
+  z  = (z | (z<<2))  & 1227133513;
+  
+  return x | (z << 2);
+}
+
+//Extracts nth interleaved component of a 3-tuple
+exports.deinterleave3 = function(v, n) {
+  v = (v >>> n)       & 1227133513;
+  v = (v | (v>>>2))   & 3272356035;
+  v = (v | (v>>>4))   & 251719695;
+  v = (v | (v>>>8))   & 4278190335;
+  v = (v | (v>>>16))  & 0x3FF;
+  return (v<<22)>>22;
+}
+
+//Computes next combination in colexicographic order (this is mistakenly called nextPermutation on the bit twiddling hacks page)
+exports.nextCombination = function(v) {
+  var t = v | (v - 1);
+  return (t + 1) | (((~t & -~t) - 1) >>> (countTrailingZeros(v) + 1));
+}
+
+
+},{}],101:[function(require,module,exports){
+module.exports=require(64)
+},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-basic-shader/node_modules/gl-shader-core/node_modules/dup/dup.js":64}],102:[function(require,module,exports){
+(function (global,Buffer){
+'use strict'
+
+var bits = require('bit-twiddle')
+var dup = require('dup')
+
+//Legacy pool support
+if(!global.__TYPEDARRAY_POOL) {
+  global.__TYPEDARRAY_POOL = {
+      UINT8   : dup([32, 0])
+    , UINT16  : dup([32, 0])
+    , UINT32  : dup([32, 0])
+    , INT8    : dup([32, 0])
+    , INT16   : dup([32, 0])
+    , INT32   : dup([32, 0])
+    , FLOAT   : dup([32, 0])
+    , DOUBLE  : dup([32, 0])
+    , DATA    : dup([32, 0])
+    , UINT8C  : dup([32, 0])
+    , BUFFER  : dup([32, 0])
+  }
+}
+
+var hasUint8C = (typeof Uint8ClampedArray) !== 'undefined'
+var POOL = global.__TYPEDARRAY_POOL
+
+//Upgrade pool
+if(!POOL.UINT8C) {
+  POOL.UINT8C = dup([32, 0])
+}
+if(!POOL.BUFFER) {
+  POOL.BUFFER = dup([32, 0])
+}
+
+//New technique: Only allocate from ArrayBufferView and Buffer
+var DATA    = POOL.DATA
+  , BUFFER  = POOL.BUFFER
+
+exports.free = function free(array) {
+  if(Buffer.isBuffer(array)) {
+    BUFFER[bits.log2(array.length)].push(array)
+  } else {
+    if(Object.prototype.toString.call(array) !== '[object ArrayBuffer]') {
+      array = array.buffer
+    }
+    if(!array) {
+      return
+    }
+    var n = array.length || array.byteLength
+    var log_n = bits.log2(n)|0
+    DATA[log_n].push(array)
+  }
+}
+
+function freeArrayBuffer(buffer) {
+  if(!buffer) {
+    return
+  }
+  var n = buffer.length || buffer.byteLength
+  var log_n = bits.log2(n)
+  DATA[log_n].push(buffer)
+}
+
+function freeTypedArray(array) {
+  freeArrayBuffer(array.buffer)
+}
+
+exports.freeUint8 =
+exports.freeUint16 =
+exports.freeUint32 =
+exports.freeInt8 =
+exports.freeInt16 =
+exports.freeInt32 =
+exports.freeFloat32 = 
+exports.freeFloat =
+exports.freeFloat64 = 
+exports.freeDouble = 
+exports.freeUint8Clamped = 
+exports.freeDataView = freeTypedArray
+
+exports.freeArrayBuffer = freeArrayBuffer
+
+exports.freeBuffer = function freeBuffer(array) {
+  BUFFER[bits.log2(array.length)].push(array)
+}
+
+exports.malloc = function malloc(n, dtype) {
+  if(dtype === undefined || dtype === 'arraybuffer') {
+    return mallocArrayBuffer(n)
+  } else {
+    switch(dtype) {
+      case 'uint8':
+        return mallocUint8(n)
+      case 'uint16':
+        return mallocUint16(n)
+      case 'uint32':
+        return mallocUint32(n)
+      case 'int8':
+        return mallocInt8(n)
+      case 'int16':
+        return mallocInt16(n)
+      case 'int32':
+        return mallocInt32(n)
+      case 'float':
+      case 'float32':
+        return mallocFloat(n)
+      case 'double':
+      case 'float64':
+        return mallocDouble(n)
+      case 'uint8_clamped':
+        return mallocUint8Clamped(n)
+      case 'buffer':
+        return mallocBuffer(n)
+      case 'data':
+      case 'dataview':
+        return mallocDataView(n)
+
+      default:
+        return null
+    }
+  }
+  return null
+}
+
+function mallocArrayBuffer(n) {
+  var n = bits.nextPow2(n)
+  var log_n = bits.log2(n)
+  var d = DATA[log_n]
+  if(d.length > 0) {
+    return d.pop()
+  }
+  return new ArrayBuffer(n)
+}
+exports.mallocArrayBuffer = mallocArrayBuffer
+
+function mallocUint8(n) {
+  return new Uint8Array(mallocArrayBuffer(n), 0, n)
+}
+exports.mallocUint8 = mallocUint8
+
+function mallocUint16(n) {
+  return new Uint16Array(mallocArrayBuffer(2*n), 0, n)
+}
+exports.mallocUint16 = mallocUint16
+
+function mallocUint32(n) {
+  return new Uint32Array(mallocArrayBuffer(4*n), 0, n)
+}
+exports.mallocUint32 = mallocUint32
+
+function mallocInt8(n) {
+  return new Int8Array(mallocArrayBuffer(n), 0, n)
+}
+exports.mallocInt8 = mallocInt8
+
+function mallocInt16(n) {
+  return new Int16Array(mallocArrayBuffer(2*n), 0, n)
+}
+exports.mallocInt16 = mallocInt16
+
+function mallocInt32(n) {
+  return new Int32Array(mallocArrayBuffer(4*n), 0, n)
+}
+exports.mallocInt32 = mallocInt32
+
+function mallocFloat(n) {
+  return new Float32Array(mallocArrayBuffer(4*n), 0, n)
+}
+exports.mallocFloat32 = exports.mallocFloat = mallocFloat
+
+function mallocDouble(n) {
+  return new Float64Array(mallocArrayBuffer(8*n), 0, n)
+}
+exports.mallocFloat64 = exports.mallocDouble = mallocDouble
+
+function mallocUint8Clamped(n) {
+  if(hasUint8C) {
+    return new Uint8ClampedArray(mallocArrayBuffer(n), 0, n)
+  } else {
+    return mallocUint8(n)
+  }
+}
+exports.mallocUint8Clamped = mallocUint8Clamped
+
+function mallocDataView(n) {
+  return new DataView(mallocArrayBuffer(n), 0, n)
+}
+exports.mallocDataView = mallocDataView
+
+function mallocBuffer(n) {
+  n = bits.nextPow2(n)
+  var log_n = bits.log2(n)
+  var cache = BUFFER[log_n]
+  if(cache.length > 0) {
+    return cache.pop()
+  }
+  return new Buffer(n)
+}
+exports.mallocBuffer = mallocBuffer
+
+exports.clearCache = function clearCache() {
+  for(var i=0; i<32; ++i) {
+    POOL.UINT8[i].length = 0
+    POOL.UINT16[i].length = 0
+    POOL.UINT32[i].length = 0
+    POOL.INT8[i].length = 0
+    POOL.INT16[i].length = 0
+    POOL.INT32[i].length = 0
+    POOL.FLOAT[i].length = 0
+    POOL.DOUBLE[i].length = 0
+    POOL.UINT8C[i].length = 0
+    DATA[i].length = 0
+    BUFFER[i].length = 0
+  }
+}
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
+},{"bit-twiddle":100,"buffer":1,"dup":101}],103:[function(require,module,exports){
+/* (The MIT License)
+ *
+ * Copyright (c) 2012 Brandon Benvie <http://bbenvie.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+ * associated documentation files (the 'Software'), to deal in the Software without restriction,
+ * including without limitation the rights to use, copy, modify, merge, publish, distribute,
+ * sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included with all copies or
+ * substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+ * BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  CLAIM,
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+// Original WeakMap implementation by Gozala @ https://gist.github.com/1269991
+// Updated and bugfixed by Raynos @ https://gist.github.com/1638059
+// Expanded by Benvie @ https://github.com/Benvie/harmony-collections
+
+void function(global, undefined_, undefined){
+  var getProps = Object.getOwnPropertyNames,
+      defProp  = Object.defineProperty,
+      toSource = Function.prototype.toString,
+      create   = Object.create,
+      hasOwn   = Object.prototype.hasOwnProperty,
+      funcName = /^\n?function\s?(\w*)?_?\(/;
+
+
+  function define(object, key, value){
+    if (typeof key === 'function') {
+      value = key;
+      key = nameOf(value).replace(/_$/, '');
+    }
+    return defProp(object, key, { configurable: true, writable: true, value: value });
+  }
+
+  function nameOf(func){
+    return typeof func !== 'function'
+          ? '' : 'name' in func
+          ? func.name : toSource.call(func).match(funcName)[1];
+  }
+
+  // ############
+  // ### Data ###
+  // ############
+
+  var Data = (function(){
+    var dataDesc = { value: { writable: true, value: undefined } },
+        datalock = 'return function(k){if(k===s)return l}',
+        uids     = create(null),
+
+        createUID = function(){
+          var key = Math.random().toString(36).slice(2);
+          return key in uids ? createUID() : uids[key] = key;
+        },
+
+        globalID = createUID(),
+
+        storage = function(obj){
+          if (hasOwn.call(obj, globalID))
+            return obj[globalID];
+
+          if (!Object.isExtensible(obj))
+            throw new TypeError("Object must be extensible");
+
+          var store = create(null);
+          defProp(obj, globalID, { value: store });
+          return store;
+        };
+
+    // common per-object storage area made visible by patching getOwnPropertyNames'
+    define(Object, function getOwnPropertyNames(obj){
+      var props = getProps(obj);
+      if (hasOwn.call(obj, globalID))
+        props.splice(props.indexOf(globalID), 1);
+      return props;
+    });
+
+    function Data(){
+      var puid = createUID(),
+          secret = {};
+
+      this.unlock = function(obj){
+        var store = storage(obj);
+        if (hasOwn.call(store, puid))
+          return store[puid](secret);
+
+        var data = create(null, dataDesc);
+        defProp(store, puid, {
+          value: new Function('s', 'l', datalock)(secret, data)
+        });
+        return data;
+      }
+    }
+
+    define(Data.prototype, function get(o){ return this.unlock(o).value });
+    define(Data.prototype, function set(o, v){ this.unlock(o).value = v });
+
+    return Data;
+  }());
+
+
+  var WM = (function(data){
+    var validate = function(key){
+      if (key == null || typeof key !== 'object' && typeof key !== 'function')
+        throw new TypeError("Invalid WeakMap key");
+    }
+
+    var wrap = function(collection, value){
+      var store = data.unlock(collection);
+      if (store.value)
+        throw new TypeError("Object is already a WeakMap");
+      store.value = value;
+    }
+
+    var unwrap = function(collection){
+      var storage = data.unlock(collection).value;
+      if (!storage)
+        throw new TypeError("WeakMap is not generic");
+      return storage;
+    }
+
+    var initialize = function(weakmap, iterable){
+      if (iterable !== null && typeof iterable === 'object' && typeof iterable.forEach === 'function') {
+        iterable.forEach(function(item, i){
+          if (item instanceof Array && item.length === 2)
+            set.call(weakmap, iterable[i][0], iterable[i][1]);
+        });
+      }
+    }
+
+
+    function WeakMap(iterable){
+      if (this === global || this == null || this === WeakMap.prototype)
+        return new WeakMap(iterable);
+
+      wrap(this, new Data);
+      initialize(this, iterable);
+    }
+
+    function get(key){
+      validate(key);
+      var value = unwrap(this).get(key);
+      return value === undefined_ ? undefined : value;
+    }
+
+    function set(key, value){
+      validate(key);
+      // store a token for explicit undefined so that "has" works correctly
+      unwrap(this).set(key, value === undefined ? undefined_ : value);
+    }
+
+    function has(key){
+      validate(key);
+      return unwrap(this).get(key) !== undefined;
+    }
+
+    function delete_(key){
+      validate(key);
+      var data = unwrap(this),
+          had = data.get(key) !== undefined;
+      data.set(key, undefined);
+      return had;
+    }
+
+    function toString(){
+      unwrap(this);
+      return '[object WeakMap]';
+    }
+
+    try {
+      var src = ('return '+delete_).replace('e_', '\\u0065'),
+          del = new Function('unwrap', 'validate', src)(unwrap, validate);
+    } catch (e) {
+      var del = delete_;
+    }
+
+    var src = (''+Object).split('Object');
+    var stringifier = function toString(){
+      return src[0] + nameOf(this) + src[1];
+    };
+
+    define(stringifier, stringifier);
+
+    var prep = { __proto__: [] } instanceof Array
+      ? function(f){ f.__proto__ = stringifier }
+      : function(f){ define(f, stringifier) };
+
+    prep(WeakMap);
+
+    [toString, get, set, has, del].forEach(function(method){
+      define(WeakMap.prototype, method);
+      prep(method);
+    });
+
+    return WeakMap;
+  }(new Data));
+
+  var defaultCreator = Object.create
+    ? function(){ return Object.create(null) }
+    : function(){ return {} };
+
+  function createStorage(creator){
+    var weakmap = new WM;
+    creator || (creator = defaultCreator);
+
+    function storage(object, value){
+      if (value || arguments.length === 2) {
+        weakmap.set(object, value);
+      } else {
+        value = weakmap.get(object);
+        if (value === undefined) {
+          value = creator(object);
+          weakmap.set(object, value);
+        }
+      }
+      return value;
+    }
+
+    return storage;
+  }
+
+
+  if (typeof module !== 'undefined') {
+    module.exports = WM;
+  } else if (typeof exports !== 'undefined') {
+    exports.WeakMap = WM;
+  } else if (!('WeakMap' in global)) {
+    global.WeakMap = WM;
+  }
+
+  WM.createStorage = createStorage;
+  if (global.WeakMap)
+    global.WeakMap.createStorage = createStorage;
+}((0, eval)('this'));
+
+},{}],104:[function(require,module,exports){
+'use strict'
+
+var weakMap = typeof WeakMap === 'undefined' ? require('weakmap') : WeakMap
+
+var WebGLEWStruct = new weakMap()
+
+function baseName(ext_name) {
+  return ext_name.replace(/^[A-Z]+_/, '')
+}
+
+function initWebGLEW(gl) {
+  var struct = WebGLEWStruct.get(gl)
+  if(struct) {
+    return struct
+  }
+  var extensions = {}
+  var supported = gl.getSupportedExtensions()
+  for(var i=0; i<supported.length; ++i) {
+    var extName = supported[i]
+
+    //Skip MOZ_ extensions
+    if(extName.indexOf('MOZ_') === 0) {
+      continue
+    }
+    var ext = gl.getExtension(supported[i])
+    if(!ext) {
+      continue
+    }
+    while(true) {
+      extensions[extName] = ext
+      var base = baseName(extName)
+      if(base === extName) {
+        break
+      }
+      extName = base
+    }
+  }
+  WebGLEWStruct.set(gl, extensions)
+  return extensions
+}
+module.exports = initWebGLEW
+},{"weakmap":103}],105:[function(require,module,exports){
+var xtend = require('xtend')
+
+var defaults = {
+	enumerable: true,
+	configurable: true
+}
+
+function mix(obj, entries) {
+	for (var k in entries) {
+		if (!entries.hasOwnProperty(k))
+			continue
+		var f = entries[k]
+		if (typeof f === 'function') {
+			obj[k] = f
+		} else if (f && typeof f === 'object') {
+			var def = xtend(defaults, f)
+			Object.defineProperty(obj, k, def);
+		}
+	}
+}
+
+module.exports = function mixes(ctor, entries) {
+	mix(ctor.prototype, entries)
+}
+
+module.exports.mix = mix
+},{"xtend":130}],106:[function(require,module,exports){
+var int8 = new Int8Array(4);
+var int32 = new Int32Array(int8.buffer, 0, 1);
+var float32 = new Float32Array(int8.buffer, 0, 1);
+
+/**
+ * A singleton for number utilities. 
+ * @class NumberUtil
+ */
+var NumberUtil = function() {
+
+};
+
+
+/**
+ * Returns a float representation of the given int bits. ArrayBuffer
+ * is used for the conversion.
+ *
+ * @method  intBitsToFloat
+ * @static
+ * @param  {Number} i the int to cast
+ * @return {Number}   the float
+ */
+NumberUtil.intBitsToFloat = function(i) {
+	int32[0] = i;
+	return float32[0];
+};
+
+/**
+ * Returns the int bits from the given float. ArrayBuffer is used
+ * for the conversion.
+ *
+ * @method  floatToIntBits
+ * @static
+ * @param  {Number} f the float to cast
+ * @return {Number}   the int bits
+ */
+NumberUtil.floatToIntBits = function(f) {
+	float32[0] = f;
+	return int32[0];
+};
+
+/**
+ * Encodes ABGR int as a float, with slight precision loss.
+ *
+ * @method  intToFloatColor
+ * @static
+ * @param {Number} value an ABGR packed integer
+ */
+NumberUtil.intToFloatColor = function(value) {
+	return NumberUtil.intBitsToFloat( value & 0xfeffffff );
+};
+
+/**
+ * Returns a float encoded ABGR value from the given RGBA
+ * bytes (0 - 255). Useful for saving bandwidth in vertex data.
+ *
+ * @method  colorToFloat
+ * @static
+ * @param {Number} r the Red byte (0 - 255)
+ * @param {Number} g the Green byte (0 - 255)
+ * @param {Number} b the Blue byte (0 - 255)
+ * @param {Number} a the Alpha byte (0 - 255)
+ * @return {Float32}  a Float32 of the RGBA color
+ */
+NumberUtil.colorToFloat = function(r, g, b, a) {
+	var bits = (a << 24 | b << 16 | g << 8 | r);
+	return NumberUtil.intToFloatColor(bits);
+};
+
+/**
+ * Returns true if the number is a power-of-two.
+ *
+ * @method  isPowerOfTwo
+ * @param  {Number}  n the number to test
+ * @return {Boolean}   true if power-of-two
+ */
+NumberUtil.isPowerOfTwo = function(n) {
+	return (n & (n - 1)) === 0;
+};
+
+/**
+ * Returns the next highest power-of-two from the specified number. 
+ * 
+ * @param  {Number} n the number to test
+ * @return {Number}   the next highest power of two
+ */
+NumberUtil.nextPowerOfTwo = function(n) {
+	n--;
+	n |= n >> 1;
+	n |= n >> 2;
+	n |= n >> 4;
+	n |= n >> 8;
+	n |= n >> 16;
+	return n+1;
+};
+
+module.exports = NumberUtil;
+},{}],107:[function(require,module,exports){
+function premultiply(rgba, out) {
+	if (!out || typeof out === 'number')
+		out = [0,0,0,0]
+	out[0] = rgba[0] * rgba[3]
+	out[1] = rgba[1] * rgba[3]
+	out[2] = rgba[2] * rgba[3]
+	out[3] = rgba[3]
+	return out
+}
+module.exports = premultiply
+},{}],108:[function(require,module,exports){
+var packColor = require('number-util').colorToFloat
+
+module.exports = function colorToFloat(rgba) {
+    return packColor(
+        ~~(rgba[0] * 255),
+        ~~(rgba[1] * 255),
+        ~~(rgba[2] * 255),
+        ~~(rgba[3] * 255)
+    )
+}
+},{"number-util":106}],109:[function(require,module,exports){
+module.exports=require(95)
+},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray-ops/ndarray-ops.js":95,"cwise-compiler":110}],110:[function(require,module,exports){
+module.exports=require(96)
+},{"./lib/thunk.js":112,"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray-ops/node_modules/cwise-compiler/compiler.js":96}],111:[function(require,module,exports){
+module.exports=require(97)
+},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray-ops/node_modules/cwise-compiler/lib/compile.js":97,"uniq":113}],112:[function(require,module,exports){
+module.exports=require(98)
+},{"./compile.js":111,"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray-ops/node_modules/cwise-compiler/lib/thunk.js":98}],113:[function(require,module,exports){
+module.exports=require(99)
+},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray-ops/node_modules/cwise-compiler/node_modules/uniq/uniq.js":99}],114:[function(require,module,exports){
 (function (Buffer){
 var iota = require("iota-array")
 
@@ -12012,7 +12948,7 @@ function wrappedNDArrayCtor(data, shape, stride, offset) {
 
 module.exports = wrappedNDArrayCtor
 }).call(this,require("buffer").Buffer)
-},{"buffer":1,"iota-array":101}],101:[function(require,module,exports){
+},{"buffer":1,"iota-array":115}],115:[function(require,module,exports){
 "use strict"
 
 function iota(n) {
@@ -12024,432 +12960,13 @@ function iota(n) {
 }
 
 module.exports = iota
-},{}],102:[function(require,module,exports){
-/**
- * Bit twiddling hacks for JavaScript.
- *
- * Author: Mikola Lysenko
- *
- * Ported from Stanford bit twiddling hack library:
- *    http://graphics.stanford.edu/~seander/bithacks.html
- */
-
-"use strict"; "use restrict";
-
-//Number of bits in an integer
-var INT_BITS = 32;
-
-//Constants
-exports.INT_BITS  = INT_BITS;
-exports.INT_MAX   =  0x7fffffff;
-exports.INT_MIN   = -1<<(INT_BITS-1);
-
-//Returns -1, 0, +1 depending on sign of x
-exports.sign = function(v) {
-  return (v > 0) - (v < 0);
-}
-
-//Computes absolute value of integer
-exports.abs = function(v) {
-  var mask = v >> (INT_BITS-1);
-  return (v ^ mask) - mask;
-}
-
-//Computes minimum of integers x and y
-exports.min = function(x, y) {
-  return y ^ ((x ^ y) & -(x < y));
-}
-
-//Computes maximum of integers x and y
-exports.max = function(x, y) {
-  return x ^ ((x ^ y) & -(x < y));
-}
-
-//Checks if a number is a power of two
-exports.isPow2 = function(v) {
-  return !(v & (v-1)) && (!!v);
-}
-
-//Computes log base 2 of v
-exports.log2 = function(v) {
-  var r, shift;
-  r =     (v > 0xFFFF) << 4; v >>>= r;
-  shift = (v > 0xFF  ) << 3; v >>>= shift; r |= shift;
-  shift = (v > 0xF   ) << 2; v >>>= shift; r |= shift;
-  shift = (v > 0x3   ) << 1; v >>>= shift; r |= shift;
-  return r | (v >> 1);
-}
-
-//Computes log base 10 of v
-exports.log10 = function(v) {
-  return  (v >= 1000000000) ? 9 : (v >= 100000000) ? 8 : (v >= 10000000) ? 7 :
-          (v >= 1000000) ? 6 : (v >= 100000) ? 5 : (v >= 10000) ? 4 :
-          (v >= 1000) ? 3 : (v >= 100) ? 2 : (v >= 10) ? 1 : 0;
-}
-
-//Counts number of bits
-exports.popCount = function(v) {
-  v = v - ((v >>> 1) & 0x55555555);
-  v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
-  return ((v + (v >>> 4) & 0xF0F0F0F) * 0x1010101) >>> 24;
-}
-
-//Counts number of trailing zeros
-function countTrailingZeros(v) {
-  var c = 32;
-  v &= -v;
-  if (v) c--;
-  if (v & 0x0000FFFF) c -= 16;
-  if (v & 0x00FF00FF) c -= 8;
-  if (v & 0x0F0F0F0F) c -= 4;
-  if (v & 0x33333333) c -= 2;
-  if (v & 0x55555555) c -= 1;
-  return c;
-}
-exports.countTrailingZeros = countTrailingZeros;
-
-//Rounds to next power of 2
-exports.nextPow2 = function(v) {
-  v += v === 0;
-  --v;
-  v |= v >>> 1;
-  v |= v >>> 2;
-  v |= v >>> 4;
-  v |= v >>> 8;
-  v |= v >>> 16;
-  return v + 1;
-}
-
-//Rounds down to previous power of 2
-exports.prevPow2 = function(v) {
-  v |= v >>> 1;
-  v |= v >>> 2;
-  v |= v >>> 4;
-  v |= v >>> 8;
-  v |= v >>> 16;
-  return v - (v>>>1);
-}
-
-//Computes parity of word
-exports.parity = function(v) {
-  v ^= v >>> 16;
-  v ^= v >>> 8;
-  v ^= v >>> 4;
-  v &= 0xf;
-  return (0x6996 >>> v) & 1;
-}
-
-var REVERSE_TABLE = new Array(256);
-
-(function(tab) {
-  for(var i=0; i<256; ++i) {
-    var v = i, r = i, s = 7;
-    for (v >>>= 1; v; v >>>= 1) {
-      r <<= 1;
-      r |= v & 1;
-      --s;
-    }
-    tab[i] = (r << s) & 0xff;
-  }
-})(REVERSE_TABLE);
-
-//Reverse bits in a 32 bit word
-exports.reverse = function(v) {
-  return  (REVERSE_TABLE[ v         & 0xff] << 24) |
-          (REVERSE_TABLE[(v >>> 8)  & 0xff] << 16) |
-          (REVERSE_TABLE[(v >>> 16) & 0xff] << 8)  |
-           REVERSE_TABLE[(v >>> 24) & 0xff];
-}
-
-//Interleave bits of 2 coordinates with 16 bits.  Useful for fast quadtree codes
-exports.interleave2 = function(x, y) {
-  x &= 0xFFFF;
-  x = (x | (x << 8)) & 0x00FF00FF;
-  x = (x | (x << 4)) & 0x0F0F0F0F;
-  x = (x | (x << 2)) & 0x33333333;
-  x = (x | (x << 1)) & 0x55555555;
-
-  y &= 0xFFFF;
-  y = (y | (y << 8)) & 0x00FF00FF;
-  y = (y | (y << 4)) & 0x0F0F0F0F;
-  y = (y | (y << 2)) & 0x33333333;
-  y = (y | (y << 1)) & 0x55555555;
-
-  return x | (y << 1);
-}
-
-//Extracts the nth interleaved component
-exports.deinterleave2 = function(v, n) {
-  v = (v >>> n) & 0x55555555;
-  v = (v | (v >>> 1))  & 0x33333333;
-  v = (v | (v >>> 2))  & 0x0F0F0F0F;
-  v = (v | (v >>> 4))  & 0x00FF00FF;
-  v = (v | (v >>> 16)) & 0x000FFFF;
-  return (v << 16) >> 16;
-}
-
-
-//Interleave bits of 3 coordinates, each with 10 bits.  Useful for fast octree codes
-exports.interleave3 = function(x, y, z) {
-  x &= 0x3FF;
-  x  = (x | (x<<16)) & 4278190335;
-  x  = (x | (x<<8))  & 251719695;
-  x  = (x | (x<<4))  & 3272356035;
-  x  = (x | (x<<2))  & 1227133513;
-
-  y &= 0x3FF;
-  y  = (y | (y<<16)) & 4278190335;
-  y  = (y | (y<<8))  & 251719695;
-  y  = (y | (y<<4))  & 3272356035;
-  y  = (y | (y<<2))  & 1227133513;
-  x |= (y << 1);
-  
-  z &= 0x3FF;
-  z  = (z | (z<<16)) & 4278190335;
-  z  = (z | (z<<8))  & 251719695;
-  z  = (z | (z<<4))  & 3272356035;
-  z  = (z | (z<<2))  & 1227133513;
-  
-  return x | (z << 2);
-}
-
-//Extracts nth interleaved component of a 3-tuple
-exports.deinterleave3 = function(v, n) {
-  v = (v >>> n)       & 1227133513;
-  v = (v | (v>>>2))   & 3272356035;
-  v = (v | (v>>>4))   & 251719695;
-  v = (v | (v>>>8))   & 4278190335;
-  v = (v | (v>>>16))  & 0x3FF;
-  return (v<<22)>>22;
-}
-
-//Computes next combination in colexicographic order (this is mistakenly called nextPermutation on the bit twiddling hacks page)
-exports.nextCombination = function(v) {
-  var t = v | (v - 1);
-  return (t + 1) | (((~t & -~t) - 1) >>> (countTrailingZeros(v) + 1));
-}
-
-
-},{}],103:[function(require,module,exports){
+},{}],116:[function(require,module,exports){
+module.exports=require(100)
+},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/typedarray-pool/node_modules/bit-twiddle/twiddle.js":100}],117:[function(require,module,exports){
 module.exports=require(64)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-basic-shader/node_modules/gl-shader-core/node_modules/dup/dup.js":64}],104:[function(require,module,exports){
-(function (global,Buffer){
-'use strict'
-
-var bits = require('bit-twiddle')
-var dup = require('dup')
-
-//Legacy pool support
-if(!global.__TYPEDARRAY_POOL) {
-  global.__TYPEDARRAY_POOL = {
-      UINT8   : dup([32, 0])
-    , UINT16  : dup([32, 0])
-    , UINT32  : dup([32, 0])
-    , INT8    : dup([32, 0])
-    , INT16   : dup([32, 0])
-    , INT32   : dup([32, 0])
-    , FLOAT   : dup([32, 0])
-    , DOUBLE  : dup([32, 0])
-    , DATA    : dup([32, 0])
-    , UINT8C  : dup([32, 0])
-    , BUFFER  : dup([32, 0])
-  }
-}
-
-var hasUint8C = (typeof Uint8ClampedArray) !== 'undefined'
-var POOL = global.__TYPEDARRAY_POOL
-
-//Upgrade pool
-if(!POOL.UINT8C) {
-  POOL.UINT8C = dup([32, 0])
-}
-if(!POOL.BUFFER) {
-  POOL.BUFFER = dup([32, 0])
-}
-
-//New technique: Only allocate from ArrayBufferView and Buffer
-var DATA    = POOL.DATA
-  , BUFFER  = POOL.BUFFER
-
-exports.free = function free(array) {
-  if(Buffer.isBuffer(array)) {
-    BUFFER[bits.log2(array.length)].push(array)
-  } else {
-    if(Object.prototype.toString.call(array) !== '[object ArrayBuffer]') {
-      array = array.buffer
-    }
-    if(!array) {
-      return
-    }
-    var n = array.length || array.byteLength
-    var log_n = bits.log2(n)|0
-    DATA[log_n].push(array)
-  }
-}
-
-function freeArrayBuffer(buffer) {
-  if(!buffer) {
-    return
-  }
-  var n = buffer.length || buffer.byteLength
-  var log_n = bits.log2(n)
-  DATA[log_n].push(buffer)
-}
-
-function freeTypedArray(array) {
-  freeArrayBuffer(array.buffer)
-}
-
-exports.freeUint8 =
-exports.freeUint16 =
-exports.freeUint32 =
-exports.freeInt8 =
-exports.freeInt16 =
-exports.freeInt32 =
-exports.freeFloat32 = 
-exports.freeFloat =
-exports.freeFloat64 = 
-exports.freeDouble = 
-exports.freeUint8Clamped = 
-exports.freeDataView = freeTypedArray
-
-exports.freeArrayBuffer = freeArrayBuffer
-
-exports.freeBuffer = function freeBuffer(array) {
-  BUFFER[bits.log2(array.length)].push(array)
-}
-
-exports.malloc = function malloc(n, dtype) {
-  if(dtype === undefined || dtype === 'arraybuffer') {
-    return mallocArrayBuffer(n)
-  } else {
-    switch(dtype) {
-      case 'uint8':
-        return mallocUint8(n)
-      case 'uint16':
-        return mallocUint16(n)
-      case 'uint32':
-        return mallocUint32(n)
-      case 'int8':
-        return mallocInt8(n)
-      case 'int16':
-        return mallocInt16(n)
-      case 'int32':
-        return mallocInt32(n)
-      case 'float':
-      case 'float32':
-        return mallocFloat(n)
-      case 'double':
-      case 'float64':
-        return mallocDouble(n)
-      case 'uint8_clamped':
-        return mallocUint8Clamped(n)
-      case 'buffer':
-        return mallocBuffer(n)
-      case 'data':
-      case 'dataview':
-        return mallocDataView(n)
-
-      default:
-        return null
-    }
-  }
-  return null
-}
-
-function mallocArrayBuffer(n) {
-  var n = bits.nextPow2(n)
-  var log_n = bits.log2(n)
-  var d = DATA[log_n]
-  if(d.length > 0) {
-    return d.pop()
-  }
-  return new ArrayBuffer(n)
-}
-exports.mallocArrayBuffer = mallocArrayBuffer
-
-function mallocUint8(n) {
-  return new Uint8Array(mallocArrayBuffer(n), 0, n)
-}
-exports.mallocUint8 = mallocUint8
-
-function mallocUint16(n) {
-  return new Uint16Array(mallocArrayBuffer(2*n), 0, n)
-}
-exports.mallocUint16 = mallocUint16
-
-function mallocUint32(n) {
-  return new Uint32Array(mallocArrayBuffer(4*n), 0, n)
-}
-exports.mallocUint32 = mallocUint32
-
-function mallocInt8(n) {
-  return new Int8Array(mallocArrayBuffer(n), 0, n)
-}
-exports.mallocInt8 = mallocInt8
-
-function mallocInt16(n) {
-  return new Int16Array(mallocArrayBuffer(2*n), 0, n)
-}
-exports.mallocInt16 = mallocInt16
-
-function mallocInt32(n) {
-  return new Int32Array(mallocArrayBuffer(4*n), 0, n)
-}
-exports.mallocInt32 = mallocInt32
-
-function mallocFloat(n) {
-  return new Float32Array(mallocArrayBuffer(4*n), 0, n)
-}
-exports.mallocFloat32 = exports.mallocFloat = mallocFloat
-
-function mallocDouble(n) {
-  return new Float64Array(mallocArrayBuffer(8*n), 0, n)
-}
-exports.mallocFloat64 = exports.mallocDouble = mallocDouble
-
-function mallocUint8Clamped(n) {
-  if(hasUint8C) {
-    return new Uint8ClampedArray(mallocArrayBuffer(n), 0, n)
-  } else {
-    return mallocUint8(n)
-  }
-}
-exports.mallocUint8Clamped = mallocUint8Clamped
-
-function mallocDataView(n) {
-  return new DataView(mallocArrayBuffer(n), 0, n)
-}
-exports.mallocDataView = mallocDataView
-
-function mallocBuffer(n) {
-  n = bits.nextPow2(n)
-  var log_n = bits.log2(n)
-  var cache = BUFFER[log_n]
-  if(cache.length > 0) {
-    return cache.pop()
-  }
-  return new Buffer(n)
-}
-exports.mallocBuffer = mallocBuffer
-
-exports.clearCache = function clearCache() {
-  for(var i=0; i<32; ++i) {
-    POOL.UINT8[i].length = 0
-    POOL.UINT16[i].length = 0
-    POOL.UINT32[i].length = 0
-    POOL.INT8[i].length = 0
-    POOL.INT16[i].length = 0
-    POOL.INT32[i].length = 0
-    POOL.FLOAT[i].length = 0
-    POOL.DOUBLE[i].length = 0
-    POOL.UINT8C[i].length = 0
-    DATA[i].length = 0
-    BUFFER[i].length = 0
-  }
-}
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("buffer").Buffer)
-},{"bit-twiddle":102,"buffer":1,"dup":103}],105:[function(require,module,exports){
+},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-basic-shader/node_modules/gl-shader-core/node_modules/dup/dup.js":64}],118:[function(require,module,exports){
+module.exports=require(102)
+},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/typedarray-pool/pool.js":102,"bit-twiddle":116,"buffer":1,"dup":117}],119:[function(require,module,exports){
 /* (The MIT License)
  *
  * Copyright (c) 2012 Brandon Benvie <http://bbenvie.com>
@@ -12683,309 +13200,9 @@ void function(global, undefined_, undefined){
     global.WeakMap.createStorage = createStorage;
 }(function(){ return this }());
 
-},{}],106:[function(require,module,exports){
-'use strict'
-
-var weakMap = typeof WeakMap === 'undefined' ? require('weakmap') : WeakMap
-
-var WebGLEWStruct = new weakMap()
-
-function baseName(ext_name) {
-  return ext_name.replace(/^[A-Z]+_/, '')
-}
-
-function initWebGLEW(gl) {
-  var struct = WebGLEWStruct.get(gl)
-  if(struct) {
-    return struct
-  }
-  var extensions = {}
-  var supported = gl.getSupportedExtensions()
-  for(var i=0; i<supported.length; ++i) {
-    var extName = supported[i]
-
-    //Skip MOZ_ extensions
-    if(extName.indexOf('MOZ_') === 0) {
-      continue
-    }
-    var ext = gl.getExtension(supported[i])
-    if(!ext) {
-      continue
-    }
-    while(true) {
-      extensions[extName] = ext
-      var base = baseName(extName)
-      if(base === extName) {
-        break
-      }
-      extName = base
-    }
-  }
-  WebGLEWStruct.set(gl, extensions)
-  return extensions
-}
-module.exports = initWebGLEW
-},{"weakmap":105}],107:[function(require,module,exports){
-module.exports=require(95)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray-ops/ndarray-ops.js":95,"cwise-compiler":108}],108:[function(require,module,exports){
-module.exports=require(96)
-},{"./lib/thunk.js":110,"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray-ops/node_modules/cwise-compiler/compiler.js":96}],109:[function(require,module,exports){
-module.exports=require(97)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray-ops/node_modules/cwise-compiler/lib/compile.js":97,"uniq":111}],110:[function(require,module,exports){
-module.exports=require(98)
-},{"./compile.js":109,"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray-ops/node_modules/cwise-compiler/lib/thunk.js":98}],111:[function(require,module,exports){
-module.exports=require(99)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray-ops/node_modules/cwise-compiler/node_modules/uniq/uniq.js":99}],112:[function(require,module,exports){
-module.exports=require(102)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/typedarray-pool/node_modules/bit-twiddle/twiddle.js":102}],113:[function(require,module,exports){
-module.exports=require(64)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-basic-shader/node_modules/gl-shader-core/node_modules/dup/dup.js":64}],114:[function(require,module,exports){
-module.exports=require(104)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/typedarray-pool/pool.js":104,"bit-twiddle":112,"buffer":1,"dup":113}],115:[function(require,module,exports){
-/* (The MIT License)
- *
- * Copyright (c) 2012 Brandon Benvie <http://bbenvie.com>
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
- * associated documentation files (the 'Software'), to deal in the Software without restriction,
- * including without limitation the rights to use, copy, modify, merge, publish, distribute,
- * sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included with all copies or
- * substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
- * BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  CLAIM,
- * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
-
-// Original WeakMap implementation by Gozala @ https://gist.github.com/1269991
-// Updated and bugfixed by Raynos @ https://gist.github.com/1638059
-// Expanded by Benvie @ https://github.com/Benvie/harmony-collections
-
-void function(global, undefined_, undefined){
-  var getProps = Object.getOwnPropertyNames,
-      defProp  = Object.defineProperty,
-      toSource = Function.prototype.toString,
-      create   = Object.create,
-      hasOwn   = Object.prototype.hasOwnProperty,
-      funcName = /^\n?function\s?(\w*)?_?\(/;
-
-
-  function define(object, key, value){
-    if (typeof key === 'function') {
-      value = key;
-      key = nameOf(value).replace(/_$/, '');
-    }
-    return defProp(object, key, { configurable: true, writable: true, value: value });
-  }
-
-  function nameOf(func){
-    return typeof func !== 'function'
-          ? '' : 'name' in func
-          ? func.name : toSource.call(func).match(funcName)[1];
-  }
-
-  // ############
-  // ### Data ###
-  // ############
-
-  var Data = (function(){
-    var dataDesc = { value: { writable: true, value: undefined } },
-        datalock = 'return function(k){if(k===s)return l}',
-        uids     = create(null),
-
-        createUID = function(){
-          var key = Math.random().toString(36).slice(2);
-          return key in uids ? createUID() : uids[key] = key;
-        },
-
-        globalID = createUID(),
-
-        storage = function(obj){
-          if (hasOwn.call(obj, globalID))
-            return obj[globalID];
-
-          if (!Object.isExtensible(obj))
-            throw new TypeError("Object must be extensible");
-
-          var store = create(null);
-          defProp(obj, globalID, { value: store });
-          return store;
-        };
-
-    // common per-object storage area made visible by patching getOwnPropertyNames'
-    define(Object, function getOwnPropertyNames(obj){
-      var props = getProps(obj);
-      if (hasOwn.call(obj, globalID))
-        props.splice(props.indexOf(globalID), 1);
-      return props;
-    });
-
-    function Data(){
-      var puid = createUID(),
-          secret = {};
-
-      this.unlock = function(obj){
-        var store = storage(obj);
-        if (hasOwn.call(store, puid))
-          return store[puid](secret);
-
-        var data = create(null, dataDesc);
-        defProp(store, puid, {
-          value: new Function('s', 'l', datalock)(secret, data)
-        });
-        return data;
-      }
-    }
-
-    define(Data.prototype, function get(o){ return this.unlock(o).value });
-    define(Data.prototype, function set(o, v){ this.unlock(o).value = v });
-
-    return Data;
-  }());
-
-
-  var WM = (function(data){
-    var validate = function(key){
-      if (key == null || typeof key !== 'object' && typeof key !== 'function')
-        throw new TypeError("Invalid WeakMap key");
-    }
-
-    var wrap = function(collection, value){
-      var store = data.unlock(collection);
-      if (store.value)
-        throw new TypeError("Object is already a WeakMap");
-      store.value = value;
-    }
-
-    var unwrap = function(collection){
-      var storage = data.unlock(collection).value;
-      if (!storage)
-        throw new TypeError("WeakMap is not generic");
-      return storage;
-    }
-
-    var initialize = function(weakmap, iterable){
-      if (iterable !== null && typeof iterable === 'object' && typeof iterable.forEach === 'function') {
-        iterable.forEach(function(item, i){
-          if (item instanceof Array && item.length === 2)
-            set.call(weakmap, iterable[i][0], iterable[i][1]);
-        });
-      }
-    }
-
-
-    function WeakMap(iterable){
-      if (this === global || this == null || this === WeakMap.prototype)
-        return new WeakMap(iterable);
-
-      wrap(this, new Data);
-      initialize(this, iterable);
-    }
-
-    function get(key){
-      validate(key);
-      var value = unwrap(this).get(key);
-      return value === undefined_ ? undefined : value;
-    }
-
-    function set(key, value){
-      validate(key);
-      // store a token for explicit undefined so that "has" works correctly
-      unwrap(this).set(key, value === undefined ? undefined_ : value);
-    }
-
-    function has(key){
-      validate(key);
-      return unwrap(this).get(key) !== undefined;
-    }
-
-    function delete_(key){
-      validate(key);
-      var data = unwrap(this),
-          had = data.get(key) !== undefined;
-      data.set(key, undefined);
-      return had;
-    }
-
-    function toString(){
-      unwrap(this);
-      return '[object WeakMap]';
-    }
-
-    try {
-      var src = ('return '+delete_).replace('e_', '\\u0065'),
-          del = new Function('unwrap', 'validate', src)(unwrap, validate);
-    } catch (e) {
-      var del = delete_;
-    }
-
-    var src = (''+Object).split('Object');
-    var stringifier = function toString(){
-      return src[0] + nameOf(this) + src[1];
-    };
-
-    define(stringifier, stringifier);
-
-    var prep = { __proto__: [] } instanceof Array
-      ? function(f){ f.__proto__ = stringifier }
-      : function(f){ define(f, stringifier) };
-
-    prep(WeakMap);
-
-    [toString, get, set, has, del].forEach(function(method){
-      define(WeakMap.prototype, method);
-      prep(method);
-    });
-
-    return WeakMap;
-  }(new Data));
-
-  var defaultCreator = Object.create
-    ? function(){ return Object.create(null) }
-    : function(){ return {} };
-
-  function createStorage(creator){
-    var weakmap = new WM;
-    creator || (creator = defaultCreator);
-
-    function storage(object, value){
-      if (value || arguments.length === 2) {
-        weakmap.set(object, value);
-      } else {
-        value = weakmap.get(object);
-        if (value === undefined) {
-          value = creator(object);
-          weakmap.set(object, value);
-        }
-      }
-      return value;
-    }
-
-    return storage;
-  }
-
-
-  if (typeof module !== 'undefined') {
-    module.exports = WM;
-  } else if (typeof exports !== 'undefined') {
-    exports.WeakMap = WM;
-  } else if (!('WeakMap' in global)) {
-    global.WeakMap = WM;
-  }
-
-  WM.createStorage = createStorage;
-  if (global.WeakMap)
-    global.WeakMap.createStorage = createStorage;
-}((0, eval)('this'));
-
-},{}],116:[function(require,module,exports){
-arguments[4][106][0].apply(exports,arguments)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/webglew/webglew.js":106,"weakmap":115}],117:[function(require,module,exports){
+},{}],120:[function(require,module,exports){
+arguments[4][104][0].apply(exports,arguments)
+},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/webglew/webglew.js":104,"weakmap":119}],121:[function(require,module,exports){
 'use strict'
 
 var ndarray = require('ndarray')
@@ -13545,7 +13762,7 @@ function createTexture2D(gl) {
   throw new Error('gl-texture2d: Invalid arguments for texture2d constructor')
 }
 
-},{"ndarray":123,"ndarray-ops":107,"typedarray-pool":114,"webglew":116}],118:[function(require,module,exports){
+},{"ndarray":114,"ndarray-ops":109,"typedarray-pool":118,"webglew":120}],122:[function(require,module,exports){
 var create = require('gl-texture2d')
 var ndarray = require('ndarray')
 
@@ -13557,207 +13774,11 @@ module.exports = function(gl) {
     var array = ndarray(new Uint8Array(data), [2, 2, 4])
     return create(gl, array)
 }
-},{"gl-texture2d":117,"ndarray":119}],119:[function(require,module,exports){
-module.exports=require(100)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray/ndarray.js":100,"buffer":1,"iota-array":120}],120:[function(require,module,exports){
-module.exports=require(101)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray/node_modules/iota-array/iota.js":101}],121:[function(require,module,exports){
-var xtend = require('xtend')
-
-var defaults = {
-	enumerable: true,
-	configurable: true
-}
-
-function mix(obj, entries) {
-	for (var k in entries) {
-		if (!entries.hasOwnProperty(k))
-			continue
-		var f = entries[k]
-		if (typeof f === 'function') {
-			obj[k] = f
-		} else if (typeof f === 'object') {
-			var def = xtend(defaults, f)
-			Object.defineProperty(obj, k, def);
-		}
-	}
-}
-
-module.exports = function mixes(ctor, entries) {
-	mix(ctor.prototype, entries)
-}
-
-module.exports.mix = mix
-},{"xtend":122}],122:[function(require,module,exports){
-module.exports = extend
-
-function extend() {
-    var target = {}
-
-    for (var i = 0; i < arguments.length; i++) {
-        var source = arguments[i]
-
-        for (var key in source) {
-            if (source.hasOwnProperty(key)) {
-                target[key] = source[key]
-            }
-        }
-    }
-
-    return target
-}
-
-},{}],123:[function(require,module,exports){
-module.exports=require(100)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray/ndarray.js":100,"buffer":1,"iota-array":124}],124:[function(require,module,exports){
-module.exports=require(101)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray/node_modules/iota-array/iota.js":101}],125:[function(require,module,exports){
-var int8 = new Int8Array(4);
-var int32 = new Int32Array(int8.buffer, 0, 1);
-var float32 = new Float32Array(int8.buffer, 0, 1);
-
-/**
- * A singleton for number utilities. 
- * @class NumberUtil
- */
-var NumberUtil = function() {
-
-};
-
-
-/**
- * Returns a float representation of the given int bits. ArrayBuffer
- * is used for the conversion.
- *
- * @method  intBitsToFloat
- * @static
- * @param  {Number} i the int to cast
- * @return {Number}   the float
- */
-NumberUtil.intBitsToFloat = function(i) {
-	int32[0] = i;
-	return float32[0];
-};
-
-/**
- * Returns the int bits from the given float. ArrayBuffer is used
- * for the conversion.
- *
- * @method  floatToIntBits
- * @static
- * @param  {Number} f the float to cast
- * @return {Number}   the int bits
- */
-NumberUtil.floatToIntBits = function(f) {
-	float32[0] = f;
-	return int32[0];
-};
-
-/**
- * Encodes ABGR int as a float, with slight precision loss.
- *
- * @method  intToFloatColor
- * @static
- * @param {Number} value an ABGR packed integer
- */
-NumberUtil.intToFloatColor = function(value) {
-	return NumberUtil.intBitsToFloat( value & 0xfeffffff );
-};
-
-/**
- * Returns a float encoded ABGR value from the given RGBA
- * bytes (0 - 255). Useful for saving bandwidth in vertex data.
- *
- * @method  colorToFloat
- * @static
- * @param {Number} r the Red byte (0 - 255)
- * @param {Number} g the Green byte (0 - 255)
- * @param {Number} b the Blue byte (0 - 255)
- * @param {Number} a the Alpha byte (0 - 255)
- * @return {Float32}  a Float32 of the RGBA color
- */
-NumberUtil.colorToFloat = function(r, g, b, a) {
-	var bits = (a << 24 | b << 16 | g << 8 | r);
-	return NumberUtil.intToFloatColor(bits);
-};
-
-/**
- * Returns true if the number is a power-of-two.
- *
- * @method  isPowerOfTwo
- * @param  {Number}  n the number to test
- * @return {Boolean}   true if power-of-two
- */
-NumberUtil.isPowerOfTwo = function(n) {
-	return (n & (n - 1)) === 0;
-};
-
-/**
- * Returns the next highest power-of-two from the specified number. 
- * 
- * @param  {Number} n the number to test
- * @return {Number}   the next highest power of two
- */
-NumberUtil.nextPowerOfTwo = function(n) {
-	n--;
-	n |= n >> 1;
-	n |= n >> 2;
-	n |= n >> 4;
-	n |= n >> 8;
-	n |= n >> 16;
-	return n+1;
-};
-
-module.exports = NumberUtil;
-},{}],126:[function(require,module,exports){
-function premultiply(rgba, out) {
-	if (!out || typeof out === 'number')
-		out = [0,0,0,0]
-	out[0] = rgba[0] * rgba[3]
-	out[1] = rgba[1] * rgba[3]
-	out[2] = rgba[2] * rgba[3]
-	out[3] = rgba[3]
-	return out
-}
-module.exports = premultiply
-},{}],127:[function(require,module,exports){
-var packColor = require('number-util').colorToFloat
-
-module.exports = function colorToFloat(rgba) {
-    return packColor(
-        ~~(rgba[0] * 255),
-        ~~(rgba[1] * 255),
-        ~~(rgba[2] * 255),
-        ~~(rgba[3] * 255)
-    )
-}
-},{"number-util":125}],128:[function(require,module,exports){
-module.exports=require(95)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray-ops/ndarray-ops.js":95,"cwise-compiler":129}],129:[function(require,module,exports){
-module.exports=require(96)
-},{"./lib/thunk.js":131,"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray-ops/node_modules/cwise-compiler/compiler.js":96}],130:[function(require,module,exports){
-module.exports=require(97)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray-ops/node_modules/cwise-compiler/lib/compile.js":97,"uniq":132}],131:[function(require,module,exports){
-module.exports=require(98)
-},{"./compile.js":130,"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray-ops/node_modules/cwise-compiler/lib/thunk.js":98}],132:[function(require,module,exports){
-module.exports=require(99)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray-ops/node_modules/cwise-compiler/node_modules/uniq/uniq.js":99}],133:[function(require,module,exports){
-module.exports=require(100)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray/ndarray.js":100,"buffer":1,"iota-array":134}],134:[function(require,module,exports){
-module.exports=require(101)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/ndarray/node_modules/iota-array/iota.js":101}],135:[function(require,module,exports){
-module.exports=require(102)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/typedarray-pool/node_modules/bit-twiddle/twiddle.js":102}],136:[function(require,module,exports){
-module.exports=require(64)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-basic-shader/node_modules/gl-shader-core/node_modules/dup/dup.js":64}],137:[function(require,module,exports){
-module.exports=require(104)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/typedarray-pool/pool.js":104,"bit-twiddle":135,"buffer":1,"dup":136}],138:[function(require,module,exports){
-module.exports=require(105)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/webglew/node_modules/weakmap/weakmap.js":105}],139:[function(require,module,exports){
-module.exports=require(106)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-buffer/node_modules/webglew/webglew.js":106,"weakmap":138}],140:[function(require,module,exports){
-arguments[4][117][0].apply(exports,arguments)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/gl-texture2d/texture.js":117,"ndarray":133,"ndarray-ops":128,"typedarray-pool":137,"webglew":139}],141:[function(require,module,exports){
+},{"gl-texture2d":121,"ndarray":123}],123:[function(require,module,exports){
+module.exports=require(114)
+},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-texture2d/node_modules/ndarray/ndarray.js":114,"buffer":1,"iota-array":124}],124:[function(require,module,exports){
+module.exports=require(115)
+},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-texture2d/node_modules/ndarray/node_modules/iota-array/iota.js":115}],125:[function(require,module,exports){
 module.exports = img;
 
 function img (src, callback) {
@@ -13783,7 +13804,7 @@ function img (src, callback) {
   return el;
 }
 
-},{}],142:[function(require,module,exports){
+},{}],126:[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -13808,7 +13829,11 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],143:[function(require,module,exports){
+},{}],127:[function(require,module,exports){
+module.exports=require(114)
+},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-texture2d/node_modules/ndarray/ndarray.js":114,"buffer":1,"iota-array":128}],128:[function(require,module,exports){
+module.exports=require(115)
+},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-texture2d/node_modules/ndarray/node_modules/iota-array/iota.js":115}],129:[function(require,module,exports){
 module.exports = function texcoord(position, shape, texShape, out) {
     if (!out)
         out = [0, 0, 1, 1]
@@ -13831,6 +13856,23 @@ module.exports = function texcoord(position, shape, texShape, out) {
     out[3] = (y + h) * invHeight
     return out
 }
-},{}],144:[function(require,module,exports){
-module.exports=require(122)
-},{"/projects/npmutils/stackgl/gl-sprite-text/node_modules/gl-sprite-batch/node_modules/mixes/node_modules/xtend/immutable.js":122}]},{},[8]);
+},{}],130:[function(require,module,exports){
+module.exports = extend
+
+function extend() {
+    var target = {}
+
+    for (var i = 0; i < arguments.length; i++) {
+        var source = arguments[i]
+
+        for (var key in source) {
+            if (source.hasOwnProperty(key)) {
+                target[key] = source[key]
+            }
+        }
+    }
+
+    return target
+}
+
+},{}]},{},[8]);
