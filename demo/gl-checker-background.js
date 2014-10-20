@@ -3,16 +3,19 @@ var Batch = require('gl-sprite-batch')
 var DefaultShader = require('gl-basic-shader')
 var xtend = require('xtend')
 
+//photoshop colors :)
+var defaultColors = [
+    [0xff, 0xff, 0xff, 0xff],
+    [0xcc, 0xcc, 0xcc, 0xff]
+]
+
 function Background(gl, opt) {
     if (!(this instanceof Background))
         return new Background(gl, opt)
     opt = opt||{}
     this.gl = gl
     this.texture = createTexture(gl, xtend({
-        colors: [
-            [0xff, 0xff, 0xff, 0xff],
-            [0xcc, 0xcc, 0xcc, 0xff]
-        ]
+        colors: defaultColors
     }, opt))
     var DPR = (window.devicePixelRatio||1)
     this.size = typeof opt.size === 'number' ? opt.size : (32*DPR)
@@ -34,7 +37,7 @@ Background.prototype.draw = function(width, height) {
     width = typeof width === 'number' ? width : this.gl.canvas.width
     height = typeof height === 'number' ? height : this.gl.canvas.height
     var checkSize = this.size
-
+    
     this.batch.clear()
     this.batch.bind(this.shader)
     this.sprite.texcoord[2] = width/checkSize

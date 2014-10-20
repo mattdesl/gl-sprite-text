@@ -83,7 +83,7 @@ TextRenderer.prototype.build = function(x, y, start, end) {
 }
 
 TextRenderer.prototype._drawGlyph = function(batch, data) {
-    //TODO: we could sort these by texture page to reduce draws
+    //... we could sort these by texture page to reduce draws
     var glyph = data.glyph
     var img = this.textures[glyph.page]
     tmpPos[0] = data.position[0]+glyph.hbx
