@@ -11,6 +11,7 @@ var tmpPos = [0, 0],
     tmp1 = [0, 0],
     tmp2 = [0, 0]
 var DEFAULT_TEXCOORD = [0, 0, 1, 1]
+var maxInitialCapacity = 500
 
 function texcoordGlyph(glyph, atlas, out) {
     tmp1[0] = glyph.x
@@ -36,14 +37,17 @@ function TextRenderer(gl, opt) {
     if (!gl)
         throw new Error("must specify gl context")
     this.batch = opt.batch || null
+
+    if (typeof opt.wrapWidth !== 'number')
+        this.layout()
 }
 
 inherits(TextRenderer, Base)
 
 TextRenderer.prototype.draw = function(shader, x, y, start, end) {
     if (!this.batch)
-        this.batch = Batch(gl)
-
+        this.batch = Batch(gl, { capacity: Math.min(this.text.length, maxInitialCapacity) })
+    
     var batch = this.batch
     batch.clear()
     batch.bind(shader)

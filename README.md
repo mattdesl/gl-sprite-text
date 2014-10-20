@@ -2,13 +2,120 @@
 
 [![experimental](http://badges.github.io/stability-badges/dist/experimental.svg)](http://github.com/badges/stability-badges)
 
-fontpath renderer for bitmap fonts in webgl
+![text](http://i.imgur.com/P5zUbNo.png)
 
-(experimental WIP)
+A solution for bitmap and [SDF](http://www.valvesoftware.com/publications/2007/SIGGRAPH2007_AlphaTestedMagnification.pdf) text rendering in stack.gl. This uses [gl-sprite-batch](https://nodei.co/npm/gl-sprite-batch/) and [fontpath](https://www.npmjs.org/package/fontpath-simple-renderer) under the hood. 
+
+The [BMFont spec](https://www.npmjs.org/package/bmfont2json) is used for glyph and font data. You also need to pass an array of [gl-texture2d](https://www.npmjs.org/package/gl-texture2d) items matching the `paths` specified by the font file. (Multi-page fonts are supported.)
+
+You can use `bmfont-lato` for testing; it includes Lato Regular in a few sizes and the base64-inlined `images` ndarray.
+
+```js
+var createTexture = require('gl-texture2d')
+var Lato = require('bmfont-lato')
+
+var textures = Lato.images.map(function(img) {  
+    return createTexture(gl, img) 
+})
+
+//build the text
+text = createText(gl, {
+    font: Lato,
+    text: 'Hello, World!',
+
+    //get gl-texture2d from inlined images
+    textures: textures
+})
+
+//optionally word-wrap is to a specific width
+text.layout(500)
+
+function render() { 
+    //draws the text with lower-left origin
+    text.draw(shader)
+}
+```
+
+See [demo/simple.js](demo/simple.js) for an example. After `npm install`, you can run it with:
+
+```npm run demo-simple```
+
+## Tools
+
+After you've exported the BMFont with [your favourite tool](https://github.com/libgdx/libgdx/wiki/Hiero), you can run it through `bmfont2json` to produce valid output:
+
+```js
+# if you haven't already, install the tool globally
+npm install bmfont2json -g
+
+# then you can use it like so..
+bmfont2json Lato32.fnt > Lato32.json
+```
+
+## Signed Distance Fields
+
+Bitmap fonts are great for fixed-size text, but if you need large fonts, or fonts that scale smoothly (i.e. if it's being 3D transformed), it's better to use alpha testing to avoid aliasing artifacts. To generate SDF font atlases, you can use [Hiero and LibGDX](https://github.com/libgdx/libgdx/wiki/Distance-field-fonts). Then, you need to render it with a signed distance field shader. See the [demo/sdf.js](demo/sdf.js) example:
+
+```npm run demo-sdf```
+
+As you can see from the demo, you can also achieve drop shadows, outlines, glows and other effects with independent colors. 
 
 ## Usage
 
 [![NPM](https://nodei.co/npm/gl-sprite-text.png)](https://nodei.co/npm/gl-sprite-text/)
+
+Inherits from `fontpath-simple-renderer` so the API should work, but this module may diverge from it in the future. Here is the current public API:
+
+#### `text = createText(opts)`
+
+The following options can be provided:
+
+- `font` the bitmap font object, required
+- `textures` an array of gl textures to match `font.paths` 
+- `text` the string of text we will be rendering, default to empty string
+- `align` a string 'left', 'center', 'right', default left
+- `underline` boolean, whether to underline the text, default false
+- `underlinePosition` the position of underline in pixels, defaults to a fraction of font size
+- `underlineThickness` the underline thickness in pixels, defaults to a fraction of font size
+- `lineHeight` a line height in pixels, otherwise defaults to an automatic gap
+- `letterSpacing` the letter spacing in pixels, default 0
+- `wrapMode` can be `normal`, `pre`, or `nowrap`, default `normal`
+- `wrapWidth` an initial number in pixels which is passed to `layout()` after the other options have been set. Otherwise, defaults to no layout (a single line, no breaks)
+
+All options except for `font`, `wrapMode` and `wrapWidth` are fields which be changed at runtime, before calling `draw()`.
+
+*Note:* Changing the `text` currently calls `clearLayout()`. You will need to call `layout()` again. 
+
+#### `text.draw(shader[, x, y, start, end])`
+
+Draws the text with the given shader, at the specified pixel position (lower-left origin). 
+
+The `start` (inclusive) and `end` (exclusive) indices will draw the laid out glyphs within those bounds. This can be used to style and colour different pieces of text. If not specified, they will default to 0 and the text length, respectively.
+
+#### `text.layout([wrapWidth])`
+
+Word-wraps the text with the current wrap mode to the optional given width. You can change the wrap mode like so:
+
+```js
+text.wordwrap.mode = 'pre'
+text.layout(250)
+```
+
+If no width is specified, it will only break on explicit newline characters `\n`.
+
+This creates some new objects in memory, so you may not want to do it every frame. 
+
+#### `text.clearLayout()`
+
+Clears the current word-wrapping. This leads to a single line of text, no line-breaks. 
+
+#### `text.getBounds()`
+
+Returns an object with the computed bounds of the text box:
+
+```{ x, y, width height }```
+
+This can be used to draw the text at an upper-left origin instead.
 
 ## License
 

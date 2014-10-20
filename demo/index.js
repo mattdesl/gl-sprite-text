@@ -1,3 +1,6 @@
+//This is a fairly complex demo, the sdf.js or simple.js demos 
+//might be a better place to look!
+
 require('canvas-testbed')(render, start, { context: 'webgl' })
 
 var createText = require('../')
