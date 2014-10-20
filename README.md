@@ -14,6 +14,7 @@ You can use `bmfont-lato` for testing; it includes Lato Regular in a few sizes a
 var createTexture = require('gl-texture2d')
 var Lato = require('bmfont-lato')
 
+//get gl textures from inlined images
 var textures = Lato.images.map(function(img) {  
     return createTexture(gl, img) 
 })
@@ -22,8 +23,6 @@ var textures = Lato.images.map(function(img) {
 text = createText(gl, {
     font: Lato,
     text: 'Hello, World!',
-
-    //get gl-texture2d from inlined images
     textures: textures
 })
 
