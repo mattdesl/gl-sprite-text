@@ -8,7 +8,7 @@ A solution for bitmap and [SDF](http://www.valvesoftware.com/publications/2007/S
 
 The [BMFont spec](https://www.npmjs.org/package/bmfont2json) is used for glyph and font data. You also need to pass an array of [gl-texture2d](https://www.npmjs.org/package/gl-texture2d) items matching the `paths` specified by the font file. (Multi-page fonts are supported.)
 
-You can use `bmfont-lato` for testing; it includes Lato Regular in a few sizes and the base64-inlined `images` ndarray.
+You can use [bmfont-lato](https://www.npmjs.org/package/bmfont-lato) for testing; it includes Lato Regular in a few sizes and the base64-inlined `images` ndarray.
 
 ```js
 var createTexture = require('gl-texture2d')
