@@ -26,7 +26,7 @@ text = createText(gl, {
     textures: textures
 })
 
-//optionally word-wrap is to a specific width
+//optionally word-wrap it to a specific width
 text.layout(500)
 
 function render() { 
