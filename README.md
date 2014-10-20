@@ -146,9 +146,9 @@ This can be used to draw the text at an upper-left origin instead.
 
 #### `text.cache([x, y, start, end])`
 
-Caches the current text parameters into a static buffer. Underlines are not supported; and this only works with single texture text (e.g. all glyphs in a single sprite sheet).
+Caches the current text parameters into a static buffer. Underlines are not supported; and this only works with one texture page (e.g. all glyphs in a single sprite sheet).
 
-The parameters replace those in `draw()`.
+The parameters replace those in `draw()`. When cached, `draw()` will ignore the `x, y, start, end` parameters.
 
 #### `text.uncache()`
 
