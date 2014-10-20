@@ -154,6 +154,12 @@ The parameters replace those in `draw()`. When cached, `draw()` will ignore the 
 
 Disables caching, allowing it to be animated dynamically again. 
 
+#### `text.dispose([textures])`
+
+If no `batch` was provided during the constructor, this will dispose of the default (internally created) batch. 
+
+Specifying true for `textures` (default false) will also dispose of the texture array associated with this text object.
+
 ## License
 
 MIT, see [LICENSE.md](http://github.com/mattdesl/gl-sprite-text/blob/master/LICENSE.md) for details.
