@@ -12,7 +12,6 @@
   "dependencies": {
     "fontpath-bmfont": "^1.0.0",
     "fontpath-simple-renderer": "^3.1.0",
-    "gl-checker-background": "^1.0.0",
     "gl-sprite-batch": "^3.0.4",
     "inherits": "^2.0.1",
     "texcoord": "^1.0.2",
@@ -20,6 +19,7 @@
   },
   "devDependencies": {
     "as-number": "^1.0.0",
+    "gl-checker-background": "^1.0.0",
     "beefy": "^2.1.1",
     "bluebird": "^2.3.5",
     "bmfont-lato": "^2.0.0",
