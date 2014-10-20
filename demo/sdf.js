@@ -3,18 +3,22 @@ require('canvas-testbed')(render, start, { context: 'webgl' })
 var createText = require('../')
 var createTexture = require('gl-texture2d')
 var createBackground = require('./gl-checker-background')
+var clear = require('gl-clear')({ color: [0.25,0.25,0.25,1] })
 var loadImage = require('img')
+
 var fs = require('fs')
 var lerp = require('lerp')
 var ease = require('eases/quart-in')
-
-var clear = require('gl-clear')({ color: [0.25,0.25,0.25,1] })
-
-var Lato = require('./sdf/DejaVu-sdf.json')
 var mat4 = require('gl-mat4')
 
+//LatoBlack-sdf is also ready to go..
+var Font = require('./sdf/DejaVu-sdf.json')
+var texturePath = 'sdf/DejaVu-sdf.png'
+
+//the text to show on screen
 var copy = fs.readFileSync(__dirname+'/sdf/frag.glsl', 'utf8')
 
+//setup our SDF shader
 var glslify = require('glslify')
 var createShader = glslify({
     vertex: __dirname+'/sdf/vert.glsl',
@@ -27,8 +31,8 @@ var text,
     shader,
     time = 600
 
+//let's do a bit of syntax styling..
 var reg = /\/\/(.*)$/gm.exec(copy)
-
 if (!reg)
     reg = { index: 0, '0': '' }
 
@@ -38,7 +42,7 @@ function render(gl, width, height, dt) {
     
     if (!text)
         return
-    
+
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
 
@@ -88,7 +92,7 @@ function start(gl, width, height) {
     })
 
     //load textures, then build our text
-    loadImage('sdf/DejaVu-sdf.png', function(err, img) {
+    loadImage(texturePath, function(err, img) {
         var tex = createTexture(gl, img)
         tex.generateMipmap()
 
@@ -97,7 +101,7 @@ function start(gl, width, height) {
         tex.magFilter = gl.LINEAR
 
         text = createText(gl, {
-            font: Lato,
+            font: Font,
             wrapMode: 'pre',
             // wrapWidth: 1200,
             text: copy,

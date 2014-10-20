@@ -59,6 +59,30 @@ Bitmap fonts are great for fixed-size text, but if you need large fonts, or font
 
 As you can see from the demo, you can also achieve drop shadows, outlines, glows and other effects with independent colors. 
 
+## Static Text
+
+By default, the text is pushed to dynamic buffers every frame. This allows it to animate (e.g. changing position, start/end indices, text content), and also ensures that underlines and multi-page textures will work. 
+
+Basic support for static text is supported with the `cache()` method. Static text only supports a single texture page, and no underlines. 
+
+```js
+var text = createText(gl, {
+    font: myFont,
+    textures: textures,
+    text: str,
+
+    //hint to buffers that they will be static
+    dynamic: false
+})
+
+//cache the current text state
+text.cache(x, y, start, end)
+
+function render() {
+    text.draw(shader)
+}
+```
+
 ## Usage
 
 [![NPM](https://nodei.co/npm/gl-sprite-text.png)](https://nodei.co/npm/gl-sprite-text/)
@@ -80,6 +104,8 @@ The following options can be provided:
 - `letterSpacing` the letter spacing in pixels, default 0
 - `wrapMode` can be `normal`, `pre`, or `nowrap`, default `normal`
 - `wrapWidth` an initial number in pixels which is passed to `layout()` after the other options have been set. Otherwise, defaults to no layout (a single line, no breaks)
+- `capacity` an initial capacity to use for gl-sprite-batch
+- `dynamic` whether the WebGL buffers should use `DYNAMIC_DRAW`, default true
 
 All options except for `font`, `wrapMode` and `wrapWidth` are fields which be changed at runtime, before calling `draw()`.
 
@@ -90,6 +116,8 @@ All options except for `font`, `wrapMode` and `wrapWidth` are fields which be ch
 Draws the text with the given shader, at the specified pixel position (lower-left origin). 
 
 The `start` (inclusive) and `end` (exclusive) indices will draw the laid out glyphs within those bounds. This can be used to style and colour different pieces of text. If not specified, they will default to 0 and the text length, respectively.
+
+If text is cached, the `x, y, start, end` parameters are ignored.
 
 #### `text.layout([wrapWidth])`
 
@@ -115,6 +143,16 @@ Returns an object with the computed bounds of the text box:
 ```{ x, y, width height }```
 
 This can be used to draw the text at an upper-left origin instead.
+
+#### `text.cache([x, y, start, end])`
+
+Caches the current text parameters into a static buffer. Underlines are not supported; and this only works with single texture text (e.g. all glyphs in a single sprite sheet).
+
+The parameters replace those in `draw()`.
+
+#### `text.uncache()`
+
+Disables caching, allowing it to be animated dynamically again. 
 
 ## License
 

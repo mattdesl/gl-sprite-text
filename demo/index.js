@@ -81,9 +81,7 @@ function render(gl, width, height, dt) {
     mat4.translate(transform, transform, [off, yoff + bigText.getBounds().height+off, 0])
     shader.uniforms.model = transform
     
-    staticBatch.bind(shader)
-    staticBatch.draw()
-    staticBatch.unbind()
+    bigText.draw(shader)
 
     gl.disable(gl.SCISSOR_TEST)
 }
@@ -137,12 +135,9 @@ function createStaticText(textures, wrapWidth) {
         align: 'left',
         text: text,
         wrapWidth: wrapWidth,
-        textures: textures
+        textures: textures,
+        dyanmic: false
     })
 
-    //build a SpriteBatch for this text element
-    bigText.build()
-
-    //now we can use that sprite batch for rendering
-    staticBatch = bigText.batch
+    bigText.cache()
 }

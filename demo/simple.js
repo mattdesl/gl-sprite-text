@@ -11,6 +11,7 @@ var mat4 = require('gl-mat4')
 
 var text, 
     ortho = mat4.create(),
+    translate = mat4.create(),
     shader,
     time = 0
 
@@ -30,14 +31,19 @@ function render(gl, width, height, dt) {
 
     //We aren't handling retina here, so it will look pretty
     //bad on high density screens.
-    text.letterSpacing = (Math.sin(time)/2+0.5)*20
-    text.lineHeight = (Math.sin(time)/2+0.5)*text.fontSize
+    // text.letterSpacing = (Math.sin(time)/2+0.5)*20
+    // text.lineHeight = (Math.sin(time)/2+0.5)*text.fontSize
 
     //get bounds of text after we've adjusted all its params
     var bounds = text.getBounds()
 
+    //here we're translating the text in a shader
+    mat4.identity(translate)
+    mat4.translate(translate, translate, [10, 10-bounds.y, 0])
+    shader.uniforms.model = translate
+
     //Draws from upper-left corner of text box.
-    text.draw(shader, 10, 10-bounds.y)
+    text.draw(shader)
 }
 
 function start(gl, width, height) {
@@ -50,11 +56,12 @@ function start(gl, width, height) {
     text = createText(gl, {
         font: Lato,
         text: 'Hello, World! Some\nmulti-line text for you.',
-        textures: textures
-
+        textures: textures,
+        dynamic: false
         //we can word-wrap like so:
         // wrapWidth: 140
     })
+    text.cache()
 
     //a shader with vertex colors and uv coords
     shader = createShader(gl, {

@@ -36,7 +36,15 @@ function TextRenderer(gl, opt) {
     this.gl = gl
     if (!gl)
         throw new Error("must specify gl context")
-    this.batch = opt.batch || null
+    
+    //assume text will be used dynamically 
+    if (typeof opt.dynamic !== 'boolean')
+        opt.dynamic = true
+
+    var batch = opt.batch
+    if (!batch)
+        this.defaultBatch = Batch(gl, opt)
+    this.batch = batch || this.defaultBatch
 
     if (typeof opt.wrapWidth !== 'number')
         this.layout()
@@ -44,35 +52,66 @@ function TextRenderer(gl, opt) {
 
 inherits(TextRenderer, Base)
 
-TextRenderer.prototype.draw = function(shader, x, y, start, end) {
-    if (!this.batch)
-        this.batch = Batch(gl, { capacity: Math.min(this.text.length, maxInitialCapacity) })
-    
-    var batch = this.batch
-    batch.clear()
-    batch.bind(shader)
-    this.build(x, y, start, end)
-    batch.draw()
-    batch.unbind()
+TextRenderer.prototype.dispose = function(textures) {
+    if (this.defaultBatch)
+        this.defaultBatch.dispose()
+    if (textures) {
+        this.textures.forEach(function(t) {
+            if (typeof t.dispose === 'function')
+                t.dispose()
+        })
+    }
+    return this
 }
 
-TextRenderer.prototype.build = function(x, y, start, end) {
+TextRenderer.prototype.uncache = function() {
+    this._cache = false
+    this.batch.clear()
+    return this
+}
+
+TextRenderer.prototype.cache = function(x, y, start, end) {
+    // if (this.underline || this.font.pages.length > 1)
+    //     throw new Error('currently cached text does not support underlines or multiple texture pages')
+    
+    this._cache = true
+    this.batch.ensureCapacity(this.text.length)
+    this.batch.clear()
+    this._build(x, y, start, end)
+    return this
+}
+
+TextRenderer.prototype.draw = function(shader, x, y, start, end) {
+    var batch = this.batch
+    batch.bind(shader)
+
+    //if we're drawing dynamically
+    if (!this._cache) {
+        batch.clear()
+        this._build(x, y, start, end)
+    }
+    
+    batch.draw()
+    batch.unbind()
+    return this
+}
+
+TextRenderer.prototype._build = function(x, y, start, end) {
     var result = this.render(x, y, start, end)
 
-    //a user calling push() is probably doing it for a static batch
-    //in which case they need the capacity to match exactly
-    if (!this.batch)
-        this.batch = Batch(gl, { capacity: result.glyphs.length + result.underlines.length })
-
     var batch = this.batch
-    batch.texcoord = DEFAULT_TEXCOORD
-    batch.texture = null
 
-    for (i = 0; i < result.underlines.length; i++) {
-        var underline = result.underlines[i]
-        batch.position = underline.position
-        batch.shape = underline.size
-        batch.push()
+    //underlines currently not supported with cache()
+    if (!this._cache) {
+        batch.texcoord = DEFAULT_TEXCOORD
+        batch.texture = null
+
+        for (i = 0; i < result.underlines.length; i++) {
+            var underline = result.underlines[i]
+            batch.position = underline.position
+            batch.shape = underline.size
+            batch.push()
+        }
     }
 
     //now draw our glyphs into the batch...
