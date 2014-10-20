@@ -43,7 +43,7 @@ See [demo/simple.js](demo/simple.js) for an example. After `npm install`, you ca
 
 After you've exported the BMFont with [your favourite tool](https://github.com/libgdx/libgdx/wiki/Hiero), you can run it through `bmfont2json` to produce valid output:
 
-```js
+```sh
 # if you haven't already, install the tool globally
 npm install bmfont2json -g
 
