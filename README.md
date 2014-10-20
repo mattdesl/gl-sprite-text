@@ -63,7 +63,7 @@ As you can see from the demo, you can also achieve drop shadows, outlines, glows
 
 By default, the text is pushed to dynamic buffers every frame. This allows it to animate (e.g. changing position, start/end indices, text content), and also ensures that underlines and multi-page textures will work. 
 
-Basic support for static text is supported with the `cache()` method. Static text only supports a single texture page, and no underlines. 
+Basic static text is supported with the `cache()` method. Static text only supports a single texture page, and no underlines. 
 
 ```js
 var text = createText(gl, {
