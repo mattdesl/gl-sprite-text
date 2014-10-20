@@ -38,8 +38,7 @@ function render(gl, width, height, dt) {
     
     if (!text)
         return
-
-    //this is necessary since our image is semi-transparent!
+    
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA)
 
@@ -56,9 +55,6 @@ function render(gl, width, height, dt) {
     shader.bind()
     shader.uniforms.projection = ortho   
     shader.uniforms.view = scale
-
-    //just because we can...
-    // text.letterSpacing = lerp(0, 20, anim)
 
     var bounds = text.getBounds()
 
