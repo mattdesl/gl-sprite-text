@@ -31,8 +31,8 @@ function render(gl, width, height, dt) {
 
     //We aren't handling retina here, so it will look pretty
     //bad on high density screens.
-    // text.letterSpacing = (Math.sin(time)/2+0.5)*20
-    // text.lineHeight = (Math.sin(time)/2+0.5)*text.fontSize
+    text.letterSpacing = (Math.sin(time)/2+0.5)*20
+    text.lineHeight = (Math.sin(time)/2+0.5)*text.fontSize
 
     //get bounds of text after we've adjusted all its params
     var bounds = text.getBounds()
@@ -56,12 +56,10 @@ function start(gl, width, height) {
     text = createText(gl, {
         font: Lato,
         text: 'Hello, World! Some\nmulti-line text for you.',
-        textures: textures,
-        dynamic: false
+        textures: textures
         //we can word-wrap like so:
         // wrapWidth: 140
     })
-    text.cache()
 
     //a shader with vertex colors and uv coords
     shader = createShader(gl, {
