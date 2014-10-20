@@ -2,7 +2,7 @@ require('canvas-testbed')(render, start, { context: 'webgl' })
 
 var createText = require('../')
 var createTexture = require('gl-texture2d')
-var createBackground = require('./gl-checker-background')
+var createBackground = require('gl-checker-background')
 var clear = require('gl-clear')({ color: [0.25,0.25,0.25,1] })
 var loadImage = require('img')
 
