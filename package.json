@@ -12,7 +12,7 @@
   "dependencies": {
     "fontpath-bmfont": "^1.0.0",
     "fontpath-simple-renderer": "^3.1.0",
-    "gl-sprite-batch": "^3.0.6",
+    "gl-sprite-batch": "^3.0.7",
     "inherits": "^2.0.1",
     "texcoord": "^1.0.2",
     "xtend": "^4.0.0"
