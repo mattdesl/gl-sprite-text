@@ -2,7 +2,6 @@ require('canvas-testbed')(render, start, { context: 'webgl' })
 
 var createText = require('../')
 var createShader = require('gl-basic-shader')
-var createTexture = require('gl-texture2d')
 
 var clear = require('gl-clear')({ color: [0,0,0,1] })
 
@@ -47,16 +46,10 @@ function render(gl, width, height, dt) {
 }
 
 function start(gl, width, height) {
-    //convert bmfont-lato into a gl texture
-    var textures = Lato.images.map(function(img) {  
-        return createTexture(gl, img) 
-    })
-
     //build our text
     text = createText(gl, {
         font: Lato,
         text: 'Hello, World! Some\nmulti-line text for you.',
-        textures: textures
         //we can word-wrap like so:
         // wrapWidth: 140
     })

@@ -8,24 +8,16 @@ A solution for bitmap and [SDF](http://www.valvesoftware.com/publications/2007/S
 
 The [BMFont spec](https://www.npmjs.org/package/bmfont2json) is used for glyph and font data. You also need to pass an array of [gl-texture2d](https://www.npmjs.org/package/gl-texture2d) items matching the `paths` specified by the font file. (Multi-page fonts are supported.)
 
-You can use [bmfont-lato](https://www.npmjs.org/package/bmfont-lato) for testing; it includes Lato Regular in a few sizes and the base64-inlined `images` ndarray.
+The `font` object can also include an `images` array (ndarray/HTMLImage), which will get piped into `gl-texture2d`.  You can use [bmfont-lato](https://www.npmjs.org/package/bmfont-lato) for testing; it includes Lato Regular in a few sizes and the base64-inlined `images` ndarray.
 
 ```js
 var createText = require('gl-sprite-text')
-
-var createTexture = require('gl-texture2d')
 var Lato = require('bmfont-lato')
-
-//get gl textures from inlined images
-var textures = Lato.images.map(function(img) {  
-    return createTexture(gl, img) 
-})
 
 //build the text
 text = createText(gl, {
     font: Lato,
-    text: 'Hello, World!',
-    textures: textures
+    text: 'Hello, World!'
 })
 
 //optionally word-wrap it to a specific width
@@ -96,7 +88,7 @@ Inherits from `fontpath-simple-renderer` so the API should work, but this module
 The following options can be provided:
 
 - `font` the bitmap font object, required
-- `textures` an array of gl textures to match `font.paths` 
+- `textures` an array of gl textures to match `font.paths`. If this is not specified, it will look for an `images` array in the `font` object, which can be ndarrays, HTMLImage objects, or anything that gets piped to `createTexture`.
 - `text` the string of text we will be rendering, default to empty string
 - `align` a string 'left', 'center', 'right', default left
 - `underline` boolean, whether to underline the text, default false

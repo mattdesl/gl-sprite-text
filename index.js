@@ -3,6 +3,7 @@ var inherits = require('inherits')
 var bmfont2fontpath = require('fontpath-bmfont')
 var texcoord = require('texcoord')
 var xtend = require('xtend')
+var createTexture = require('gl-texture2d')
 
 var Batch = require('gl-sprite-batch')
 
@@ -28,6 +29,14 @@ function TextRenderer(gl, opt) {
 
     if (!opt.font) 
         throw new Error('must specify bmfont at creation time')
+
+    //if the font has Image/ndarray array
+    if (!opt.textures && Array.isArray(opt.font.images)) {
+        opt.textures = opt.font.images.map(function(img) {
+            return createTexture(gl, img)
+        })
+    }
+
     opt.font = bmfont2fontpath(opt.font)
 
     Base.call(this, opt)
