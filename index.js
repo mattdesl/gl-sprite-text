@@ -109,7 +109,8 @@ TextRenderer.prototype._build = function(x, y, start, end) {
     var result = this.render(x, y, start, end)
 
     var batch = this.batch
-
+    var i = 0
+    
     //underlines currently not supported with cache()
     if (!this._cache) {
         batch.texcoord = DEFAULT_TEXCOORD
