@@ -20,14 +20,15 @@
   },
   "devDependencies": {
     "as-number": "^1.0.0",
-    "gl-checker-background": "^1.0.0",
     "beefy": "^2.1.1",
     "bluebird": "^2.3.5",
     "bmfont-lato": "^2.0.0",
     "brfs": "^1.2.0",
+    "browserify": "^8.1.0",
     "canvas-testbed": "^1.0.2",
     "eases": "^1.0.2",
     "gl-basic-shader": "^1.2.2",
+    "gl-checker-background": "^1.0.0",
     "gl-clear": "0.0.1",
     "gl-mat4": "^1.0.0",
     "gl-texture2d": "^2.0.7",
@@ -36,6 +37,7 @@
     "lerp": "^1.0.0",
     "ndarray": "^1.0.15",
     "smoothstep": "^1.0.1",
+    "uglify-js": "^2.4.16",
     "xtend": "^4.0.0"
   },
   "scripts": {
@@ -43,7 +45,7 @@
     "demo": "beefy demo/index.js --open --cwd demo",
     "demo-sdf": "beefy demo/sdf.js --cwd demo --open -- -t brfs -t glslify",
     "demo-simple": "beefy demo/simple.js --open --cwd demo",
-    "build": "browserify demo/index.js -o demo/js/bundle.js",
+    "build": "browserify demo/index.js | uglifyjs -cm > demo/js/bundle.js",
     "build-sdf": "browserify demo/sdf.js -t brfs -t glslify | uglifyjs -cm > demo/js/sdf-bundle.js"
   },
   "keywords": [
