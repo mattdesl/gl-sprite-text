@@ -1,6 +1,6 @@
 {
   "name": "gl-sprite-text",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "fontpath renderer for bitmap fonts in webgl",
   "main": "index.js",
   "license": "MIT",
