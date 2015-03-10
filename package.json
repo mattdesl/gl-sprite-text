@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "fontpath-bmfont": "^1.0.0",
-    "fontpath-simple-renderer": "^3.1.0",
+    "fontpath-simple-renderer": "^4.0.0",
     "gl-sprite-batch": "^3.1.0",
     "gl-texture2d": "^2.0.8",
     "inherits": "^2.0.1",
